@@ -67,6 +67,7 @@ func main() {
 	j := identificarContrato(p_contratos, linha[1])
 	fmt.Println(j) // se j == -1 , contrato nao esta presente na observacao
 
+	// TESTE COMMIT 21
 	/*
 		for i, _ := range contratos {
 			cnt := contratos[i]
