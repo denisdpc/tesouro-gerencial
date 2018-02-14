@@ -164,15 +164,7 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 
 }
 
-// obter saldos de empenhos indexidos a cada contrato
-func processar() {
-	for _, c := range contratos {
-		c.saldos()
-	}
-}
-
-func (cnt *Contrato) saldos() {
-	fmt.Println(cnt.Numero)
+func (cnt *Contrato) saldos() [7]float64 {
 	saldos := [7]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 
 	for _, emp := range cnt.Empenhos {
@@ -180,7 +172,7 @@ func (cnt *Contrato) saldos() {
 			saldos[i] += v
 		}
 	}
-	fmt.Println("CNT=", saldos)
+	return saldos
 }
 
 // emp, liq, rp_inscr,rp_liq_antigo,rp_cancel_antigo,rp_liq_atual,rp_cancel_atual
@@ -199,8 +191,21 @@ func (emp *Empenho) saldos() [7]float64 {
 			saldos[6] += v.RP_cancelado
 		}
 	}
-	fmt.Println(saldos)
 	return saldos
+}
+
+// CONTNUAR DAQUI
+// retornar saldo, RP_reinscrito, RP_inscrito
+func processar() {
+	//var aux [7]float64
+	for _, c := range contratos {
+		fmt.Println(c.Numero)
+		fmt.Println(c.saldos())
+		aux := c.saldos()
+		saldo := aux[0] - aux[1] + aux[2] - aux[3] - aux[4] - aux[5] - aux[6]
+		fmt.Println(saldo)
+
+	}
 }
 
 func main() {
@@ -209,8 +214,6 @@ func main() {
 	mapEmpenhos := getMapEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 
-	for _, c := range contratos {
-		c.saldos()
-	}
+	processar()
 
 }
