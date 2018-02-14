@@ -166,11 +166,41 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 
 // obter saldos de empenhos indexidos a cada contrato
 func processar() {
-	ano_base := time.Now().Local().Year()
-	for k, v := range contratos {
-		fmt.Println(k, v)
+	for _, c := range contratos {
+		c.saldos()
 	}
-	fmt.Println(ano_base)
+}
+
+func (cnt *Contrato) saldos() {
+	fmt.Println(cnt.Numero)
+	saldos := [7]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+
+	for _, emp := range cnt.Empenhos {
+		for i, v := range emp.saldos() {
+			saldos[i] += v
+		}
+	}
+	fmt.Println("CNT=", saldos)
+}
+
+// emp, liq, rp_inscr,rp_liq_antigo,rp_cancel_antigo,rp_liq_atual,rp_cancel_atual
+func (emp *Empenho) saldos() [7]float64 {
+	ano_atual := time.Now().Local().Year()
+	saldos := [7]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+	for _, v := range emp.Transacoes {
+		saldos[0] += v.Empenhado
+		saldos[1] += v.Liquidado
+		saldos[2] += v.RP_inscrito
+		if ano_atual > v.Ano { // execução de RP no ano anterior
+			saldos[3] += v.RP_liquidado
+			saldos[4] += v.RP_cancelado
+		} else { // execução de RP no ano atual
+			saldos[5] += v.RP_liquidado
+			saldos[6] += v.RP_cancelado
+		}
+	}
+	fmt.Println(saldos)
+	return saldos
 }
 
 func main() {
@@ -179,94 +209,8 @@ func main() {
 	mapEmpenhos := getMapEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 
-	processar()
+	for _, c := range contratos {
+		c.saldos()
+	}
 
-	// LEITURA DAS LINHAS
-
-	/*
-		p_contratos := relacionarProjetoContrato()
-		fmt.Println(p_contratos)
-
-		linha := []string{"NE80032", "xxxx 031/GAL-PAMASP/2016 DSFF"}
-		//obs := "xxxx 046/GAL-PAMASP/2017 DSFF"
-		j := identificarContrato(p_contratos, linha[1])
-		fmt.Println(j) // se j == -1 , contrato nao esta presente na observacao
-	*/
-	// TESTE COMMIT 21"
-	/*
-		for i, _ := range contratos {
-			cnt := contratos[i]
-			fmt.Println(i, cnt)
-		}
-
-		aux := [2]string{"asas", "dfdf"}
-		identificarContrato(contratos, aux)
-
-		for i, _ := range contratos {
-			cnt := contratos[i]
-			fmt.Println(i, cnt)
-		}
-	*/
-
-	// LEITURA DO ARQUIVOs
-	// CRIAR EMPENHO CONFORME LEITURA
-	// VERIFICAR SE EMPENHO TEM CONTRATO ASSOCIADO
-	// SE NAO TIVER, VERIFICAR SE NA OBSERVAcao CONSTA ALGUM DOS CONTRATOS PARA ASSOCIAR
-	// RELACIONAR TRANSACAO AO EMPENHO
-
-	// TESTES
-	/*
-		e11 := Empenho{Numero: "NE800321"}
-		c1 := Contrato{Numero: "001/PAMASP/2011"}
-
-		e11.Contrato = &c1
-
-		c1.Empenhos = make(map[string]*Empenho)
-		c1.Empenhos[e11.Numero] = &e11
-
-		fmt.Println(c1.Numero, (*e11.Contrato).Numero)
-
-		c1.Numero = "002/PAMASP"
-
-		fmt.Println(c1.Numero, (*e11.Contrato).Numero)
-
-		e11.Numero = "NE12344"
-
-		fmt.Println(c1.Empenhos["NE800321"].Numero)
-	*/
 }
-
-/*
-func relacionarProjetoContrato() []*Contrato {
-	file, err := os.Open("contratos.dat")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	var p_contratos []*Contrato
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		aux := strings.Split(scanner.Text(), ":")
-		p_contratos = append(p_contratos, &Contrato{Projeto: aux[0], Numero: aux[1]})
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-	return p_contratos
-}
-*/
-
-/*
-func identificarContrato(contratos []*Contrato, obs string) int {
-	for i, cnt := range contratos {
-		if strings.Contains(obs, cnt.Numero) {
-			fmt.Println(cnt.Numero)
-			return i
-		}
-	}
-	return -1
-}
-*/
