@@ -164,8 +164,8 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 
 }
 
-func (cnt *Contrato) saldos() [7]float64 {
-	saldos := [7]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+func (cnt *Contrato) saldos() [8]float64 {
+	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 
 	for _, emp := range cnt.Empenhos {
 		for i, v := range emp.saldos() {
@@ -175,36 +175,91 @@ func (cnt *Contrato) saldos() [7]float64 {
 	return saldos
 }
 
-// emp, liq, rp_inscr,rp_liq_antigo,rp_cancel_antigo,rp_liq_atual,rp_cancel_atual
-func (emp *Empenho) saldos() [7]float64 {
+// (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
+// (4) rp_liq_exerc_anterior, (5) rp_cancel_exerc_anterior,
+// (6) rp_liq_exerc_atual, (7) rp_cancel_exerc_atual
+func (emp *Empenho) saldos() [8]float64 {
 	ano_atual := time.Now().Local().Year()
-	saldos := [7]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 	for _, v := range emp.Transacoes {
 		saldos[0] += v.Empenhado
 		saldos[1] += v.Liquidado
 		saldos[2] += v.RP_inscrito
+		saldos[3] += v.RP_reinscrito
 		if ano_atual > v.Ano { // execução de RP no ano anterior
-			saldos[3] += v.RP_liquidado
-			saldos[4] += v.RP_cancelado
+			saldos[4] += v.RP_liquidado
+			saldos[5] += v.RP_cancelado
 		} else { // execução de RP no ano atual
-			saldos[5] += v.RP_liquidado
-			saldos[6] += v.RP_cancelado
+			saldos[6] += v.RP_liquidado
+			saldos[7] += v.RP_cancelado
 		}
 	}
 	return saldos
 }
 
-// CONTNUAR DAQUI
-// retornar saldo, RP_reinscrito, RP_inscrito
-func processar() {
-	//var aux [7]float64
-	for _, c := range contratos {
-		fmt.Println(c.Numero)
-		fmt.Println(c.saldos())
-		aux := c.saldos()
-		saldo := aux[0] - aux[1] + aux[2] - aux[3] - aux[4] - aux[5] - aux[6]
-		fmt.Println(saldo)
+func gravarSaldos() {
+	//ano := strconv.Itoa(time.Now().Local().Year())
+	//mes := strconv.Itoa(time.Now().Local().Month())
+	//dia := strconv.Itoa(time.Now().Local().Day())
 
+	//str := "saldos " + ano + "_" + mes + "_" + dia
+	//fmt.Println(str)
+
+	file, _ := os.Create("saldos.csv")
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	writer.Comma = ';'
+	defer writer.Flush()
+
+	record := []string{
+		"UGE",
+		"PRJ",
+		"Número",
+		"Saldo RP",
+		"Saldo Exerc Atual"}
+
+	writer.Write(record)
+
+	for _, c := range contratos {
+
+		saldoAtual := 0.0
+		saldoRP := 0.0
+
+		aux := c.saldos()
+
+		rp_inscrito := aux[2]
+		rp_reinscrito := aux[3]
+		if rp_reinscrito > 0 || rp_inscrito > 0 {
+			if rp_reinscrito > 0 {
+				saldoRP = rp_reinscrito
+			} else {
+				saldoRP = rp_inscrito
+			}
+			rp_liq_exerc_atual := aux[6]
+			rp_cancel_exerc_atual := aux[7]
+			saldoRP -= rp_liq_exerc_atual + rp_cancel_exerc_atual
+		} else {
+			empenhado := aux[0]
+			liquidado := aux[0]
+			saldoAtual = empenhado - liquidado
+		}
+
+		saldoRP_ := strconv.FormatFloat(saldoRP, 'f', -1, 64)
+		saldoRP_ = strings.Replace(saldoRP_, ".", ",", -1)
+
+		saldoAtual_ := strconv.FormatFloat(saldoAtual, 'f', -1, 64)
+		saldoAtual_ = strings.Replace(saldoAtual_, ".", ",", -1)
+
+		record := []string{
+			c.UGE,
+			c.Projeto,
+			c.Numero,
+			saldoRP_,
+			saldoAtual_}
+
+		writer.Write(record)
+		fmt.Println(record)
 	}
 }
 
@@ -214,6 +269,6 @@ func main() {
 	mapEmpenhos := getMapEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 
-	processar()
+	gravarSaldos()
 
 }
