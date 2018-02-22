@@ -198,14 +198,17 @@ func (emp *Empenho) saldos() [8]float64 {
 }
 
 func gravarSaldos() {
-	//ano := strconv.Itoa(time.Now().Local().Year())
-	//mes := strconv.Itoa(time.Now().Local().Month())
-	//dia := strconv.Itoa(time.Now().Local().Day())
 
-	//str := "saldos " + ano + "_" + mes + "_" + dia
-	//fmt.Println(str)
+	year, month, day := time.Now().Date()
 
-	file, _ := os.Create("saldos.csv")
+	arq := "saldos_" +
+		strconv.Itoa(int(year)) + "_" +
+		strconv.Itoa(int(month)) + "_" +
+		strconv.Itoa(int(day)) + ".csv"
+
+	fmt.Println(arq)
+
+	file, _ := os.Create(arq)
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
