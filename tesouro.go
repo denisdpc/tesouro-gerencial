@@ -197,6 +197,46 @@ func (emp *Empenho) saldos() [8]float64 {
 	return saldos
 }
 
+func calcularSaldos(cnt *Contrato) []string {
+
+	saldoAtual := 0.0
+	saldoRP := 0.0
+
+	aux := cnt.saldos()
+
+	rp_inscrito := aux[2]
+	rp_reinscrito := aux[3]
+	if rp_reinscrito > 0 || rp_inscrito > 0 {
+		if rp_reinscrito > 0 {
+			saldoRP = rp_reinscrito
+		} else {
+			saldoRP = rp_inscrito
+		}
+		rp_liq_exerc_atual := aux[6]
+		rp_cancel_exerc_atual := aux[7]
+		saldoRP -= rp_liq_exerc_atual + rp_cancel_exerc_atual
+	} else {
+		empenhado := aux[0]
+		liquidado := aux[0]
+		saldoAtual = empenhado - liquidado
+	}
+
+	saldoRP_ := strconv.FormatFloat(saldoRP, 'f', -1, 64)
+	saldoRP_ = strings.Replace(saldoRP_, ".", ",", -1)
+
+	saldoAtual_ := strconv.FormatFloat(saldoAtual, 'f', -1, 64)
+	saldoAtual_ = strings.Replace(saldoAtual_, ".", ",", -1)
+
+	record := []string{
+		cnt.UGE,
+		cnt.Projeto,
+		cnt.Numero,
+		saldoRP_,
+		saldoAtual_}
+
+	return record
+}
+
 func gravarSaldos() {
 
 	year, month, day := time.Now().Date()
@@ -225,42 +265,7 @@ func gravarSaldos() {
 	writer.Write(record)
 
 	for _, c := range contratos {
-
-		saldoAtual := 0.0
-		saldoRP := 0.0
-
-		aux := c.saldos()
-
-		rp_inscrito := aux[2]
-		rp_reinscrito := aux[3]
-		if rp_reinscrito > 0 || rp_inscrito > 0 {
-			if rp_reinscrito > 0 {
-				saldoRP = rp_reinscrito
-			} else {
-				saldoRP = rp_inscrito
-			}
-			rp_liq_exerc_atual := aux[6]
-			rp_cancel_exerc_atual := aux[7]
-			saldoRP -= rp_liq_exerc_atual + rp_cancel_exerc_atual
-		} else {
-			empenhado := aux[0]
-			liquidado := aux[0]
-			saldoAtual = empenhado - liquidado
-		}
-
-		saldoRP_ := strconv.FormatFloat(saldoRP, 'f', -1, 64)
-		saldoRP_ = strings.Replace(saldoRP_, ".", ",", -1)
-
-		saldoAtual_ := strconv.FormatFloat(saldoAtual, 'f', -1, 64)
-		saldoAtual_ = strings.Replace(saldoAtual_, ".", ",", -1)
-
-		record := []string{
-			c.UGE,
-			c.Projeto,
-			c.Numero,
-			saldoRP_,
-			saldoAtual_}
-
+		record = calcularSaldos(c)
 		writer.Write(record)
 		fmt.Println(record)
 	}
