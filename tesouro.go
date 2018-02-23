@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -13,15 +12,19 @@ import (
 )
 
 type Contrato struct {
-	Projeto string
-	UGE     string
-	Numero  string
+	Projeto    string
+	UGE        string
+	Numero     string
+	SaldoRP    float64
+	SaldoATUAL float64
 
 	Empenhos map[string]*Empenho
 }
 
 type Empenho struct {
-	Numero string
+	Numero     string
+	SaldoRP    float64
+	SaldoATUAL float64
 
 	Contrato   *Contrato
 	Transacoes []*Transacao
@@ -143,7 +146,6 @@ func setarCampos(linha []string) {
 
 // ler arquivo em CSV do Tesouro Gerencial para adicionar transaçoes no empenho
 func adicionarTransacoes(empenhos map[string]*Empenho) {
-
 	csvFile, _ := os.Open("tesouro.csv")
 	reader := csv.NewReader(bufio.NewReader(csvFile))
 	reader.Comma = ';'
@@ -190,60 +192,24 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 
 }
 
-func (cnt *Contrato) saldos() [8]float64 {
-	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+func (cnt *Contrato) setSaldos() {
+	saldoRP := 0.0
+	saldoATUAL := 0.0
 
 	for _, emp := range cnt.Empenhos {
-		for i, v := range emp.saldos() {
-			saldos[i] += v
-		}
+		emp.setSaldos()
+		saldoRP += emp.SaldoRP
+		saldoATUAL += emp.SaldoATUAL
 	}
-	return saldos
-}
-
-func (cnt *Contrato) resumido() []string {
-	saldoAtual := 0.0
-	saldoRP := 0.0
-
-	aux := cnt.saldos()
-
-	rp_inscrito := aux[2]
-	rp_reinscrito := aux[3]
-	if rp_reinscrito > 0 || rp_inscrito > 0 {
-		if rp_reinscrito > 0 {
-			saldoRP = rp_reinscrito
-		} else {
-			saldoRP = rp_inscrito
-		}
-		rp_liq_exerc_atual := aux[6]
-		rp_cancel_exerc_atual := aux[7]
-		saldoRP -= rp_liq_exerc_atual + rp_cancel_exerc_atual
-	} else {
-		empenhado := aux[0]
-		liquidado := aux[0]
-		saldoAtual = empenhado - liquidado
-	}
-
-	saldoRP_ := strconv.FormatFloat(saldoRP, 'f', -1, 64)
-	saldoRP_ = strings.Replace(saldoRP_, ".", ",", -1)
-
-	saldoAtual_ := strconv.FormatFloat(saldoAtual, 'f', -1, 64)
-	saldoAtual_ = strings.Replace(saldoAtual_, ".", ",", -1)
-
-	registro := []string{
-		cnt.UGE,
-		cnt.Projeto,
-		cnt.Numero,
-		saldoRP_,
-		saldoAtual_}
-
-	return registro
+	cnt.SaldoRP = saldoRP
+	cnt.SaldoATUAL = saldoATUAL
 }
 
 // (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
 // (4) rp_liq_exerc_anterior, (5) rp_cancel_exerc_anterior,
 // (6) rp_liq_exerc_atual, (7) rp_cancel_exerc_atual
-func (emp *Empenho) saldos() [8]float64 {
+//func (emp *Empenho) saldos() [8]float64 {
+func (emp *Empenho) setSaldos() {
 	ano_atual := time.Now().Local().Year()
 	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 	for _, v := range emp.Transacoes {
@@ -259,19 +225,39 @@ func (emp *Empenho) saldos() [8]float64 {
 			saldos[7] += v.RP_cancelado
 		}
 	}
-	return saldos
+
+	saldoRP := 0.0
+	saldoATUAL := 0.0
+
+	rp_inscrito := saldos[2]
+	rp_reinscrito := saldos[3]
+
+	if rp_reinscrito > 0 || rp_inscrito > 0 {
+		if rp_reinscrito > 0 {
+			saldoRP = rp_reinscrito
+		} else {
+			saldoRP = rp_inscrito
+		}
+		rp_liq_exerc_atual := saldos[6]
+		rp_cancel_exerc_atual := saldos[7]
+		saldoRP -= rp_liq_exerc_atual + rp_cancel_exerc_atual
+	} else {
+		empenhado := saldos[0]
+		liquidado := saldos[0]
+		saldoATUAL = empenhado - liquidado
+	}
+
+	emp.SaldoRP = saldoRP
+	emp.SaldoATUAL = saldoATUAL
 }
 
 func gravarSaldos() {
-
 	year, month, day := time.Now().Date()
 
 	arq := "db/saldos_" +
 		strconv.Itoa(int(year)) + "_" +
 		strconv.Itoa(int(month)) + "_" +
 		strconv.Itoa(int(day)) + ".csv"
-
-	fmt.Println(arq)
 
 	file, _ := os.Create(arq)
 	defer file.Close()
@@ -290,9 +276,22 @@ func gravarSaldos() {
 	writer.Write(registro)
 
 	for _, c := range contratos {
-		registro = c.resumido()
+		c.setSaldos()
+
+		saldoRP := strconv.FormatFloat(c.SaldoRP, 'f', -1, 64)
+		saldoRP = strings.Replace(saldoRP, ".", ",", -1)
+
+		saldoATUAL := strconv.FormatFloat(c.SaldoATUAL, 'f', -1, 64)
+		saldoATUAL = strings.Replace(saldoATUAL, ".", ",", -1)
+
+		registro := []string{
+			c.UGE,
+			c.Projeto,
+			c.Numero,
+			saldoRP,
+			saldoATUAL}
+
 		writer.Write(registro)
-		fmt.Println(registro)
 	}
 }
 
@@ -301,5 +300,4 @@ func main() {
 	mapEmpenhos := getMapEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 	gravarSaldos()
-
 }
