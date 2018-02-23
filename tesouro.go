@@ -28,40 +28,35 @@ type Empenho struct {
 }
 
 type Transacao struct {
-	Ano        int
-	Observacao string
-	Empenhado  float64 // DESPESAS EMPENHADAS (29)
-	Liquidado  float64 // DESPESAS LIQUIDADAS (31)
+	Ano int
+	//Observacao string
+	Empenhado float64 // DESPESAS EMPENHADAS (29)
+	Liquidado float64 // DESPESAS LIQUIDADAS (31)
 
 	RP_inscrito   float64 // RP INSCRITO (40)
 	RP_reinscrito float64 // RP REINSCRITO (41)
 	RP_cancelado  float64 // RP CANCELADO (42)
 	RP_liquidado  float64 // RP LIQUIDADO (44)
-
-	//Empenho *Empenho
 }
 
-var ANO, EMP, LIQ, RP_INSC, RP_REINSCR, RP_CANCEL, RP_LIQ int // colunas
-var UGE map[string]string                                     // inicio do empenho corresponente à UGE
-var contratos map[string]*Contrato                            // mapa com os contratos
+var ANO, NUM_EMP, EMP, LIQ, RP_INSC, RP_REINSCR, RP_CANCEL, RP_LIQ int // colunas
+var UGE map[string]string                                              // inicio do empenho corresponente à UGE
+var contratos map[string]*Contrato                                     // mapa com os contratos
 
 func setup() {
 
 	// início do número de empenho de acordo com a UGE
 	UGE = map[string]string{
 		"GAL":    "12019500001",
-		"GAP-SP": "12007100001",
+		"GAP-SP": "12063300001",
 		"CABE":   "12009100001",
-		"CABW":   "1200900000"}
-
-	// colunas da tabela para extração de dados de interesse
-	ANO, EMP, LIQ = 0, 20, 22
-	RP_INSC, RP_REINSCR, RP_CANCEL, RP_LIQ = 24, 45, 46, 48
+		"CABW":   "1200900000",
+		"CELOG":  "12007100001"}
 }
 
 // ler arquivo contratos.dat para obter empenhos de interesse
 func getMapEmpenhos() map[string]*Empenho {
-	file, err := os.Open("contratos.dat")
+	file, err := os.Open("empenhos.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -117,7 +112,33 @@ func extrairValor(v string) float64 {
 		x = "-" + x
 	}
 	y, _ := strconv.ParseFloat(x, 64)
+
 	return y
+}
+
+func setarCampos(linha []string) {
+	cont := 0
+	for _, l := range linha {
+
+		switch col := l; col {
+		case "DESPESAS EMPENHADAS (CONTROLE EMPENHO)": // DESPESAS EMPENHADAS (CONTROLE EMPENHO)
+			EMP = cont
+		case "Nota Empenho CCor":
+			NUM_EMP = cont
+		case "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)": // DESPESAS LIQUIDADAS (CONTROLE EMPENHO)
+			LIQ = cont
+		case "RESTOS A PAGAR NAO PROCESSADOS INSCRITOS": // RESTOS A PAGAR NAO PROCESSADOS INSCRITOS
+			RP_INSC = cont
+		case "RESTOS A PAGAR NAO PROCESSADOS REINSCRITOS": // RESTOS A PAGAR NAO PROCESSADOS REINSCRITOS
+			RP_REINSCR = cont
+		case "RESTOS A PAGAR NAO PROCESSADOS CANCELADOS": // RESTOS A PAGAR NAO PROCESSADOS CANCELADOS
+			RP_CANCEL = cont
+		case "RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS": // RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS
+			RP_LIQ = cont
+		}
+		cont++
+	}
+	ANO = 0
 }
 
 // ler arquivo em CSV do Tesouro Gerencial para adicionar transaçoes no empenho
@@ -127,6 +148,8 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 	reader := csv.NewReader(bufio.NewReader(csvFile))
 	reader.Comma = ';'
 
+	primeiraLinha := true
+
 	for {
 		linha, err := reader.Read()
 		if err == io.EOF {
@@ -135,23 +158,26 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 			log.Fatal(err)
 		}
 
-		empenho, temEmpenho := empenhos[linha[10]]
+		if primeiraLinha {
+			primeiraLinha = false
+			setarCampos(linha)
+		}
+
+		empenho, temEmpenho := empenhos[linha[NUM_EMP]]
 		if !temEmpenho {
 			continue
 		}
 
-		ano, _ := strconv.Atoi(linha[ANO])
-		obs := linha[14]
-		emp := extrairValor(linha[20])        // DESPESAS EMPENHADAS (29)
-		liq := extrairValor(linha[22])        // DESPESAS LIQUIDADAS (31)
-		rp_inscr := extrairValor(linha[24])   // RP INSCRITO (40)
-		rp_reinscr := extrairValor(linha[25]) // RP REINSCRITO (41)
-		rp_cancel := extrairValor(linha[26])  // RP CANCELADO (42)
-		rp_liq := extrairValor(linha[28])     // RP LIQUIDADO (44)
+		ano, _ := strconv.Atoi(linha[ANO])            // ANO DA TRANSAÇÃO (0)
+		emp := extrairValor(linha[EMP])               // DESPESAS EMPENHADAS (29)
+		liq := extrairValor(linha[LIQ])               // DESPESAS LIQUIDADAS (31)
+		rp_inscr := extrairValor(linha[RP_INSC])      // RP INSCRITO (40)
+		rp_reinscr := extrairValor(linha[RP_REINSCR]) // RP REINSCRITO (41)
+		rp_cancel := extrairValor(linha[RP_CANCEL])   // RP CANCELADO (42)
+		rp_liq := extrairValor(linha[RP_LIQ])         // RP LIQUIDADO (44)
 
 		transacao := Transacao{
 			Ano:           ano,
-			Observacao:    obs,
 			Empenhado:     emp,
 			Liquidado:     liq,
 			RP_inscrito:   rp_inscr,
@@ -175,30 +201,7 @@ func (cnt *Contrato) saldos() [8]float64 {
 	return saldos
 }
 
-// (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
-// (4) rp_liq_exerc_anterior, (5) rp_cancel_exerc_anterior,
-// (6) rp_liq_exerc_atual, (7) rp_cancel_exerc_atual
-func (emp *Empenho) saldos() [8]float64 {
-	ano_atual := time.Now().Local().Year()
-	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
-	for _, v := range emp.Transacoes {
-		saldos[0] += v.Empenhado
-		saldos[1] += v.Liquidado
-		saldos[2] += v.RP_inscrito
-		saldos[3] += v.RP_reinscrito
-		if ano_atual > v.Ano { // execução de RP no ano anterior
-			saldos[4] += v.RP_liquidado
-			saldos[5] += v.RP_cancelado
-		} else { // execução de RP no ano atual
-			saldos[6] += v.RP_liquidado
-			saldos[7] += v.RP_cancelado
-		}
-	}
-	return saldos
-}
-
-func calcularSaldos(cnt *Contrato) []string {
-
+func (cnt *Contrato) resumido() []string {
 	saldoAtual := 0.0
 	saldoRP := 0.0
 
@@ -227,21 +230,43 @@ func calcularSaldos(cnt *Contrato) []string {
 	saldoAtual_ := strconv.FormatFloat(saldoAtual, 'f', -1, 64)
 	saldoAtual_ = strings.Replace(saldoAtual_, ".", ",", -1)
 
-	record := []string{
+	registro := []string{
 		cnt.UGE,
 		cnt.Projeto,
 		cnt.Numero,
 		saldoRP_,
 		saldoAtual_}
 
-	return record
+	return registro
+}
+
+// (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
+// (4) rp_liq_exerc_anterior, (5) rp_cancel_exerc_anterior,
+// (6) rp_liq_exerc_atual, (7) rp_cancel_exerc_atual
+func (emp *Empenho) saldos() [8]float64 {
+	ano_atual := time.Now().Local().Year()
+	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+	for _, v := range emp.Transacoes {
+		saldos[0] += v.Empenhado
+		saldos[1] += v.Liquidado
+		saldos[2] += v.RP_inscrito
+		saldos[3] += v.RP_reinscrito
+		if ano_atual > v.Ano { // execução de RP no ano anterior
+			saldos[4] += v.RP_liquidado
+			saldos[5] += v.RP_cancelado
+		} else { // execução de RP no ano atual
+			saldos[6] += v.RP_liquidado
+			saldos[7] += v.RP_cancelado
+		}
+	}
+	return saldos
 }
 
 func gravarSaldos() {
 
 	year, month, day := time.Now().Date()
 
-	arq := "saldos_" +
+	arq := "db/saldos_" +
 		strconv.Itoa(int(year)) + "_" +
 		strconv.Itoa(int(month)) + "_" +
 		strconv.Itoa(int(day)) + ".csv"
@@ -255,28 +280,26 @@ func gravarSaldos() {
 	writer.Comma = ';'
 	defer writer.Flush()
 
-	record := []string{
+	registro := []string{
 		"UGE",
 		"PRJ",
 		"Número",
 		"Saldo RP",
 		"Saldo Exerc Atual"}
 
-	writer.Write(record)
+	writer.Write(registro)
 
 	for _, c := range contratos {
-		record = calcularSaldos(c)
-		writer.Write(record)
-		fmt.Println(record)
+		registro = c.resumido()
+		writer.Write(registro)
+		fmt.Println(registro)
 	}
 }
 
 func main() {
-
 	setup()
 	mapEmpenhos := getMapEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
-
 	gravarSaldos()
 
 }
