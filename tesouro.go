@@ -11,28 +11,30 @@ import (
 	"time"
 )
 
+type Saldo struct {
+	RP    float64
+	Atual float64
+}
+
 type Contrato struct {
-	Projeto    string
-	UGE        string
-	Numero     string
-	SaldoRP    float64
-	SaldoATUAL float64
+	Projeto string
+	UGE     string
+	Numero  string
+	Saldo
 
 	Empenhos map[string]*Empenho
 }
 
 type Empenho struct {
-	Numero     string
-	SaldoRP    float64
-	SaldoATUAL float64
+	Numero string
+	Saldo
 
 	Contrato   *Contrato
 	Transacoes []*Transacao
 }
 
 type Transacao struct {
-	Ano int
-	//Observacao string
+	Ano       int
 	Empenhado float64 // DESPESAS EMPENHADAS (29)
 	Liquidado float64 // DESPESAS LIQUIDADAS (31)
 
@@ -57,7 +59,7 @@ func setup() {
 		"CELOG":  "12007100001"}
 }
 
-// ler arquivo contratos.dat para obter empenhos de interesse
+// ler arquivo empenhos.txt para obter empenhos de interesse
 func getMapEmpenhos() map[string]*Empenho {
 	file, err := os.Open("empenhos.txt")
 	if err != nil {
@@ -192,23 +194,36 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 
 }
 
+// retorna um array de strings formatado [RP,Atual]
+func (s Saldo) toTextArray() [2]string {
+	var saldos [2]string
+
+	saldos[0] = strconv.FormatFloat(s.RP, 'f', -1, 64)
+	saldos[0] = strings.Replace(saldos[0], ".", ",", -1)
+
+	saldos[1] = strconv.FormatFloat(s.Atual, 'f', -1, 64)
+	saldos[1] = strings.Replace(saldos[1], ".", ",", -1)
+
+	return saldos
+}
+
 func (cnt *Contrato) setSaldos() {
 	saldoRP := 0.0
 	saldoATUAL := 0.0
 
 	for _, emp := range cnt.Empenhos {
 		emp.setSaldos()
-		saldoRP += emp.SaldoRP
-		saldoATUAL += emp.SaldoATUAL
+		saldoRP += emp.Saldo.RP
+		saldoATUAL += emp.Saldo.Atual
 	}
-	cnt.SaldoRP = saldoRP
-	cnt.SaldoATUAL = saldoATUAL
+
+	cnt.Saldo.RP = saldoRP
+	cnt.Saldo.Atual = saldoATUAL
 }
 
 // (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
 // (4) rp_liq_exerc_anterior, (5) rp_cancel_exerc_anterior,
 // (6) rp_liq_exerc_atual, (7) rp_cancel_exerc_atual
-//func (emp *Empenho) saldos() [8]float64 {
 func (emp *Empenho) setSaldos() {
 	ano_atual := time.Now().Local().Year()
 	saldos := [8]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
@@ -246,9 +261,8 @@ func (emp *Empenho) setSaldos() {
 		liquidado := saldos[0]
 		saldoATUAL = empenhado - liquidado
 	}
-
-	emp.SaldoRP = saldoRP
-	emp.SaldoATUAL = saldoATUAL
+	emp.Saldo.RP = saldoRP
+	emp.Saldo.Atual = saldoATUAL
 }
 
 func gravarSaldos() {
@@ -269,7 +283,7 @@ func gravarSaldos() {
 	registro := []string{
 		"UGE",
 		"PRJ",
-		"Número",
+		"Numero",
 		"Saldo RP",
 		"Saldo Exerc Atual"}
 
@@ -277,19 +291,14 @@ func gravarSaldos() {
 
 	for _, c := range contratos {
 		c.setSaldos()
-
-		saldoRP := strconv.FormatFloat(c.SaldoRP, 'f', -1, 64)
-		saldoRP = strings.Replace(saldoRP, ".", ",", -1)
-
-		saldoATUAL := strconv.FormatFloat(c.SaldoATUAL, 'f', -1, 64)
-		saldoATUAL = strings.Replace(saldoATUAL, ".", ",", -1)
+		saldos := c.Saldo.toTextArray()
 
 		registro := []string{
 			c.UGE,
 			c.Projeto,
 			c.Numero,
-			saldoRP,
-			saldoATUAL}
+			saldos[0],
+			saldos[1]}
 
 		writer.Write(registro)
 	}
