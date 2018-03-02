@@ -266,12 +266,8 @@ func (emp *Empenho) setSaldos() {
 }
 
 func gravarSaldos() {
-	year, month, day := time.Now().Date()
-
-	arq := "db/saldos_" +
-		strconv.Itoa(int(year)) + "_" +
-		strconv.Itoa(int(month)) + "_" +
-		strconv.Itoa(int(day)) + ".csv"
+	t := time.Now().Local()
+	arq := "db/saldos " + t.Format("2006-01-02") + ".csv"
 
 	file, _ := os.Create(arq)
 	defer file.Close()
