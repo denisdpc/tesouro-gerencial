@@ -60,7 +60,7 @@ func setup() {
 }
 
 // ler arquivo empenhos.txt para obter empenhos de interesse
-func getMapEmpenhos() map[string]*Empenho {
+func popularEmpenhos() map[string]*Empenho {
 	file, err := os.Open("empenhos.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -84,20 +84,23 @@ func getMapEmpenhos() map[string]*Empenho {
 				UGE:     aux[1],
 				Numero:  cntNumero}
 
-		} else if len(aux[0]) == 12 { // desconsidera linhas vazias
-			contrato := contratos[cntNumero] // ponteiro
-			empNumero := ugeNumero + aux[0]  // acrescenta numero UGE
+		} else {
+			aux[0] = strings.Trim(aux[0], " ")
+			if len(aux[0]) == 12 { // desconsidera linhas vazias
+				contrato := contratos[cntNumero] // ponteiro
+				empNumero := ugeNumero + aux[0]  // acrescenta numero UGE
 
-			empenho := Empenho{
-				Numero:   empNumero,
-				Contrato: contrato} // ponteiro
+				empenho := Empenho{
+					Numero:   empNumero,
+					Contrato: contrato} // ponteiro
 
-			if contrato.Empenhos == nil {
-				contrato.Empenhos = make(map[string]*Empenho)
+				if contrato.Empenhos == nil {
+					contrato.Empenhos = make(map[string]*Empenho)
+				}
+				contrato.Empenhos[empNumero] = &empenho
+
+				empenhos[empNumero] = &empenho
 			}
-			contrato.Empenhos[empNumero] = &empenho
-
-			empenhos[empNumero] = &empenho
 		}
 
 	}
@@ -302,7 +305,7 @@ func gravarSaldos() {
 
 func main() {
 	setup()
-	mapEmpenhos := getMapEmpenhos() // string,*Empenho
+	mapEmpenhos := popularEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 	gravarSaldos()
 }
