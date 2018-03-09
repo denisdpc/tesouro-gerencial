@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -222,6 +223,9 @@ func (cnt *Contrato) setSaldos() {
 
 	cnt.Saldo.RP = saldoRP
 	cnt.Saldo.Atual = saldoATUAL
+
+	fmt.Println(cnt.Numero)
+	fmt.Println("\n")
 }
 
 // (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
@@ -266,6 +270,13 @@ func (emp *Empenho) setSaldos() {
 	}
 	emp.Saldo.RP = saldoRP
 	emp.Saldo.Atual = saldoATUAL
+
+	rp := strconv.FormatFloat(emp.Saldo.RP, 'f', 2, 32)
+	rp = strings.Repeat(" ", 15-len(rp)) + rp
+
+	fmt.Println(emp.Numero, "\t",
+		rp, "\t\t\t",
+		strconv.FormatFloat(emp.Saldo.Atual, 'f', 2, 32))
 }
 
 func gravarSaldos() {
@@ -308,4 +319,9 @@ func main() {
 	mapEmpenhos := popularEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 	gravarSaldos()
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("\n\n Pressione uma tecla")
+	text, _ := reader.ReadString('\n')
+	fmt.Println(text)
 }
