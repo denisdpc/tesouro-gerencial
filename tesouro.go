@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -71,16 +72,19 @@ func popularEmpenhos() map[string]*Empenho {
 	empenhos := make(map[string]*Empenho)
 	contratos = make(map[string]*Contrato)
 
-	var cntNumero, ugeNumero string
+	var cntNumero, ugeNumero, chave string
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		aux := strings.Split(scanner.Text(), ":")
 
 		if len(aux) == 3 { // linhas com número do contrato
+			chave = aux[1] + " " + aux[0] + " " + aux[2]
+
 			cntNumero = aux[2]
 			ugeNumero = UGE[aux[1]]
-			contratos[cntNumero] = &Contrato{
+
+			contratos[chave] = &Contrato{
 				Projeto: aux[0],
 				UGE:     aux[1],
 				Numero:  cntNumero}
@@ -88,8 +92,8 @@ func popularEmpenhos() map[string]*Empenho {
 		} else {
 			aux[0] = strings.Trim(aux[0], " ")
 			if len(aux[0]) == 12 { // desconsidera linhas vazias
-				contrato := contratos[cntNumero] // ponteiro
-				empNumero := ugeNumero + aux[0]  // acrescenta numero UGE
+				contrato := contratos[chave]    // ponteiro
+				empNumero := ugeNumero + aux[0] // acrescenta numero UGE
 
 				empenho := Empenho{
 					Numero:   empNumero,
@@ -299,7 +303,16 @@ func gravarSaldos() {
 
 	writer.Write(registro)
 
-	for _, c := range contratos {
+	// ORDENACAO
+	chaves := make([]string, 0, len(contratos))
+	for k, _ := range contratos {
+		chaves = append(chaves, k) // UGE, PROJ, CNT.NUMERO
+	}
+	sort.Strings(chaves)
+
+	for _, k := range chaves {
+		fmt.Println(k)
+		c := contratos[k]
 		c.setSaldos()
 		saldos := c.Saldo.toTextArray()
 
@@ -312,6 +325,7 @@ func gravarSaldos() {
 
 		writer.Write(registro)
 	}
+
 }
 
 func main() {
@@ -320,8 +334,8 @@ func main() {
 	adicionarTransacoes(mapEmpenhos)
 	gravarSaldos()
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("\n\n Pressione uma tecla")
-	text, _ := reader.ReadString('\n')
-	fmt.Println(text)
+	//reader := bufio.NewReader(os.Stdin)
+	//fmt.Println("\n\n Pressione uma tecla")
+	//text, _ := reader.ReadString('\n')
+	//fmt.Println(text)
 }
