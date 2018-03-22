@@ -228,7 +228,7 @@ func (cnt *Contrato) setSaldos() {
 	cnt.Saldo.RP = saldoRP
 	cnt.Saldo.Atual = saldoATUAL
 
-	fmt.Println(cnt.Numero)
+	//fmt.Println(cnt.Numero)
 	fmt.Println("\n")
 }
 
@@ -258,7 +258,7 @@ func (emp *Empenho) setSaldos() {
 	rp_inscrito := saldos[2]
 	rp_reinscrito := saldos[3]
 
-	if rp_reinscrito > 0 || rp_inscrito > 0 {
+	if rp_reinscrito > 0 || rp_inscrito > 0 { // cálculo de saldo
 		if rp_reinscrito > 0 {
 			saldoRP = rp_reinscrito
 		} else {
@@ -269,9 +269,11 @@ func (emp *Empenho) setSaldos() {
 		saldoRP -= rp_liq_exerc_atual + rp_cancel_exerc_atual
 	} else {
 		empenhado := saldos[0]
-		liquidado := saldos[0]
+		liquidado := saldos[1]
 		saldoATUAL = empenhado - liquidado
+		fmt.Println("SALDO:", saldoATUAL, "    ", empenhado, "   ", liquidado, emp.Numero)
 	}
+
 	emp.Saldo.RP = saldoRP
 	emp.Saldo.Atual = saldoATUAL
 
@@ -303,8 +305,7 @@ func gravarSaldos() {
 
 	writer.Write(registro)
 
-	// ORDENACAO
-	chaves := make([]string, 0, len(contratos))
+	chaves := make([]string, 0, len(contratos)) // ordenação
 	for k, _ := range contratos {
 		chaves = append(chaves, k) // UGE, PROJ, CNT.NUMERO
 	}
