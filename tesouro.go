@@ -270,7 +270,6 @@ func (emp *Empenho) setSaldos() {
 		empenhado := saldos[0]
 		liquidado := saldos[1]
 		saldoATUAL = empenhado - liquidado
-		fmt.Println("SALDO:", saldoATUAL, "    ", empenhado, "   ", liquidado, emp.Numero)
 	}
 
 	emp.Saldo.RP = saldoRP
@@ -361,9 +360,7 @@ func gravarSaldos() {
 	sort.Strings(chaves)
 
 	gravarResumido(chaves, writer)
-
 	writer.Write([]string{}) // pula linha
-
 	gravarDetalhado(chaves, writer)
 }
 
