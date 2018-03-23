@@ -134,19 +134,19 @@ func setarCampos(linha []string) {
 	for _, l := range linha {
 
 		switch col := l; col {
-		case "DESPESAS EMPENHADAS (CONTROLE EMPENHO)": // DESPESAS EMPENHADAS (CONTROLE EMPENHO)
+		case "DESPESAS EMPENHADAS (CONTROLE EMPENHO)":
 			EMP = cont
 		case "Nota Empenho CCor":
 			NUM_EMP = cont
-		case "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)": // DESPESAS LIQUIDADAS (CONTROLE EMPENHO)
+		case "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)":
 			LIQ = cont
-		case "RESTOS A PAGAR NAO PROCESSADOS INSCRITOS": // RESTOS A PAGAR NAO PROCESSADOS INSCRITOS
+		case "RESTOS A PAGAR NAO PROCESSADOS INSCRITOS":
 			RP_INSC = cont
-		case "RESTOS A PAGAR NAO PROCESSADOS REINSCRITOS": // RESTOS A PAGAR NAO PROCESSADOS REINSCRITOS
+		case "RESTOS A PAGAR NAO PROCESSADOS REINSCRITOS":
 			RP_REINSCR = cont
-		case "RESTOS A PAGAR NAO PROCESSADOS CANCELADOS": // RESTOS A PAGAR NAO PROCESSADOS CANCELADOS
+		case "RESTOS A PAGAR NAO PROCESSADOS CANCELADOS":
 			RP_CANCEL = cont
-		case "RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS": // RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS
+		case "RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS":
 			RP_LIQ = cont
 		}
 		cont++
@@ -228,7 +228,6 @@ func (cnt *Contrato) setSaldos() {
 	cnt.Saldo.RP = saldoRP
 	cnt.Saldo.Atual = saldoATUAL
 
-	//fmt.Println(cnt.Numero)
 	fmt.Println("\n")
 }
 
@@ -285,6 +284,56 @@ func (emp *Empenho) setSaldos() {
 		strconv.FormatFloat(emp.Saldo.Atual, 'f', 2, 32))
 }
 
+func gravarResumido(chaves []string, writer *csv.Writer) {
+	for _, k := range chaves {
+		fmt.Println(k)
+		c := contratos[k]
+		c.setSaldos()
+		saldos := c.Saldo.toTextArray()
+
+		registro := []string{
+			c.UGE,
+			c.Projeto,
+			c.Numero,
+			saldos[0],
+			saldos[1]}
+
+		writer.Write(registro)
+	}
+}
+
+func gravarDetalhado(chaves []string, writer *csv.Writer) {
+	for _, kc := range chaves {
+		fmt.Println(kc)
+		c := contratos[kc]
+		c.setSaldos()
+		saldos := c.Saldo.toTextArray()
+
+		registro := []string{
+			c.UGE,
+			c.Projeto,
+			c.Numero,
+			saldos[0],
+			saldos[1]}
+
+		writer.Write(registro)
+
+		for _, ke := range c.Empenhos {
+			saldos := ke.Saldo.toTextArray()
+
+			registro = []string{
+				"",
+				"",
+				ke.Numero,
+				saldos[0],
+				saldos[1]}
+
+			writer.Write(registro)
+		}
+		writer.Write([]string{}) // pula linha
+	}
+}
+
 func gravarSaldos() {
 	t := time.Now().Local()
 	arq := "db/saldos " + t.Format("2006-01-02") + ".csv"
@@ -311,22 +360,18 @@ func gravarSaldos() {
 	}
 	sort.Strings(chaves)
 
-	for _, k := range chaves {
-		fmt.Println(k)
-		c := contratos[k]
-		c.setSaldos()
-		saldos := c.Saldo.toTextArray()
+	gravarResumido(chaves, writer)
 
-		registro := []string{
-			c.UGE,
-			c.Projeto,
-			c.Numero,
-			saldos[0],
-			saldos[1]}
+	writer.Write([]string{}) // pula linha
 
-		writer.Write(registro)
-	}
+	gravarDetalhado(chaves, writer)
+}
 
+func pressionarTecla() { // utilizar para testes
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("\n\n Pressione uma tecla")
+	text, _ := reader.ReadString('\n')
+	fmt.Println(text)
 }
 
 func main() {
@@ -334,9 +379,4 @@ func main() {
 	mapEmpenhos := popularEmpenhos() // string,*Empenho
 	adicionarTransacoes(mapEmpenhos)
 	gravarSaldos()
-
-	//reader := bufio.NewReader(os.Stdin)
-	//fmt.Println("\n\n Pressione uma tecla")
-	//text, _ := reader.ReadString('\n')
-	//fmt.Println(text)
 }
