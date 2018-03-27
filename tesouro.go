@@ -302,6 +302,8 @@ func gravarResumido(chaves []string, writer *csv.Writer) {
 }
 
 func gravarDetalhado(chaves []string, writer *csv.Writer) {
+	writer.Write([]string{"Detalhado"})
+	writer.Write([]string{})
 	for _, kc := range chaves {
 		fmt.Println(kc)
 		c := contratos[kc]
