@@ -183,7 +183,7 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 		ano, _ := strconv.Atoi(linha[ANO])            // ANO DA TRANSAÇÃO (0)
 		emp := extrairValor(linha[EMP])               // DESPESAS EMPENHADAS (29)
 		liq := extrairValor(linha[LIQ])               // DESPESAS LIQUIDADAS (31)
-		rp_inscr := extrairValor(linha[RP_INSC])      // RP INSCRITO (40)
+		rpInscr := extrairValor(linha[RP_INSC])       // RP INSCRITO (40)
 		rp_reinscr := extrairValor(linha[RP_REINSCR]) // RP REINSCRITO (41)
 		rp_cancel := extrairValor(linha[RP_CANCEL])   // RP CANCELADO (42)
 		rp_liq := extrairValor(linha[RP_LIQ])         // RP LIQUIDADO (44)
@@ -192,7 +192,7 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 			Ano:           ano,
 			Empenhado:     emp,
 			Liquidado:     liq,
-			RP_inscrito:   rp_inscr,
+			RP_inscrito:   rpInscr,
 			RP_reinscrito: rp_reinscr,
 			RP_cancelado:  rp_cancel,
 			RP_liquidado:  rp_liq}
