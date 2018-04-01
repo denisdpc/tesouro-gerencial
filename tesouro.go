@@ -46,14 +46,15 @@ type Transacao struct {
 	RpLiquidado  float64 // RP LIQUIDADO (44)
 }
 
-var Ano, NumEmp, Emp, Liq, RpInsc, RpReinscr, RpCancel, RpLiq int // colunas
-var UGE map[string]string                                         // inicio do empenho corresponente à UGE
-var contratos map[string]*Contrato                                // mapa com os contratos
+var colAno, colNumEmp, colEmp, colLiq int              // colunas
+var colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
+var uge map[string]string                              // inicio do empenho corresponente à UGE
+var contratos map[string]*Contrato                     // mapa com os contratos
 
 func setup() {
 
 	// início do número de empenho de acordo com a UGE
-	UGE = map[string]string{
+	uge = map[string]string{
 		"GAL":    "12019500001",
 		"GAP-SP": "12063300001",
 		"CABE":   "12009100001",
@@ -82,7 +83,7 @@ func popularEmpenhos() map[string]*Empenho {
 			chave = aux[1] + " " + aux[0] + " " + aux[2]
 
 			cntNumero = aux[2]
-			ugeNumero = UGE[aux[1]]
+			ugeNumero = uge[aux[1]]
 
 			contratos[chave] = &Contrato{
 				Projeto: aux[0],
@@ -135,23 +136,23 @@ func setarCampos(linha []string) {
 
 		switch col := l; col {
 		case "DESPESAS EMPENHADAS (CONTROLE EMPENHO)":
-			Emp = cont
+			colEmp = cont
 		case "Nota Empenho CCor":
-			NumEmp = cont
+			colNumEmp = cont
 		case "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)":
-			Liq = cont
+			colLiq = cont
 		case "RESTOS A PAGAR NAO PROCESSADOS INSCRITOS":
-			RpInsc = cont
+			colRpInsc = cont
 		case "RESTOS A PAGAR NAO PROCESSADOS REINSCRITOS":
-			RpReinscr = cont
+			colRpReinscr = cont
 		case "RESTOS A PAGAR NAO PROCESSADOS CANCELADOS":
-			RpCancel = cont
+			colRpCancel = cont
 		case "RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS":
-			RpLiq = cont
+			colRpLiq = cont
 		}
 		cont++
 	}
-	Ano = 0
+	colAno = 0
 }
 
 // ler arquivo em CSV do Tesouro Gerencial para adicionar transaçoes no empenho
@@ -175,18 +176,18 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 			setarCampos(linha)
 		}
 
-		empenho, temEmpenho := empenhos[linha[NumEmp]]
+		empenho, temEmpenho := empenhos[linha[colNumEmp]]
 		if !temEmpenho {
 			continue
 		}
 
-		ano, _ := strconv.Atoi(linha[Ano])          // ANO DA TRANSAÇÃO (0)
-		emp := extrairValor(linha[Emp])             // DESPESAS EMPENHADAS (29)
-		liq := extrairValor(linha[Liq])             // DESPESAS LIQUIDADAS (31)
-		rpInscr := extrairValor(linha[RpInsc])      // RP INSCRITO (40)
-		rpReinscr := extrairValor(linha[RpReinscr]) // RP REINSCRITO (41)
-		rpCancel := extrairValor(linha[RpCancel])   // RP CANCELADO (42)
-		rpLiq := extrairValor(linha[RpLiq])         // RP LIQUIDADO (44)
+		ano, _ := strconv.Atoi(linha[colAno])          // ANO DA TRANSAÇÃO (0)
+		emp := extrairValor(linha[colEmp])             // DESPESAS EMPENHADAS (29)
+		liq := extrairValor(linha[colLiq])             // DESPESAS LIQUIDADAS (31)
+		rpInscr := extrairValor(linha[colRpInsc])      // RP INSCRITO (40)
+		rpReinscr := extrairValor(linha[colRpReinscr]) // RP REINSCRITO (41)
+		rpCancel := extrairValor(linha[colRpCancel])   // RP CANCELADO (42)
+		rpLiq := extrairValor(linha[colRpLiq])         // RP LIQUIDADO (44)
 
 		transacao := Transacao{
 			Ano:          ano,
@@ -228,7 +229,7 @@ func (cnt *Contrato) setSaldos() {
 	cnt.Saldo.RP = saldoRP
 	cnt.Saldo.Atual = saldoATUAL
 
-	fmt.Println("\n")
+	fmt.Println()
 }
 
 // (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
