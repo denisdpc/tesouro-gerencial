@@ -198,13 +198,17 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 			anul = aux
 		}
 
-		//emp := extrairValor(linha[colEmp])             // DESPESAS EMPENHADAS (29)
-		//anul := extrairValor(linha[colEmp])            // DESPESAS EMPENHADAS (29)
-		liq := extrairValor(linha[colLiq])             // DESPESAS LIQUIDADAS (31)
-		rpInscr := extrairValor(linha[colRpInsc])      // RP INSCRITO (40)
-		rpReinscr := extrairValor(linha[colRpReinscr]) // RP REINSCRITO (41)
-		rpCancel := extrairValor(linha[colRpCancel])   // RP CANCELADO (42)
-		rpLiq := extrairValor(linha[colRpLiq])         // RP LIQUIDADO (44)
+		liq := extrairValor(linha[colLiq]) // DESPESAS LIQUIDADAS (31)
+
+		var rpInscr, rpReinscr float64
+		t := time.Now().Local()
+		if ano == t.Year() { // desconsidera RP gerados em anos anteriores ao atual
+			rpInscr = extrairValor(linha[colRpInsc])      // RP INSCRITO (40)
+			rpReinscr = extrairValor(linha[colRpReinscr]) // RP REINSCRITO (41)
+		}
+
+		rpCancel := extrairValor(linha[colRpCancel]) // RP CANCELADO (42)
+		rpLiq := extrairValor(linha[colRpLiq])       // RP LIQUIDADO (44)
 
 		nd := linha[colNd] // NATUREZA DE DESPESA
 
@@ -224,24 +228,20 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 
 }
 
+func valorToText(valor float64) string {
+	aux := strconv.FormatFloat(valor, 'f', -1, 64)
+	return strings.Replace(aux, ".", ",", -1)
+}
+
 // retorna um array de strings formatado [RP,Atual]
 func (s Saldo) toTextArray() [5]string {
 	var saldos [5]string
 
-	saldos[0] = strconv.FormatFloat(s.RP, 'f', -1, 64)
-	saldos[0] = strings.Replace(saldos[0], ".", ",", -1)
-
-	saldos[1] = strconv.FormatFloat(s.Atual, 'f', -1, 64)
-	saldos[1] = strings.Replace(saldos[1], ".", ",", -1)
-
-	saldos[2] = strconv.FormatFloat(s.Empenhado, 'f', -1, 64)
-	saldos[2] = strings.Replace(saldos[2], ".", ",", -1)
-
-	saldos[3] = strconv.FormatFloat(-s.Liquidado, 'f', -1, 64)
-	saldos[3] = strings.Replace(saldos[3], ".", ",", -1)
-
-	saldos[4] = strconv.FormatFloat(s.Anulado, 'f', -1, 64)
-	saldos[4] = strings.Replace(saldos[4], ".", ",", -1)
+	saldos[0] = valorToText(s.RP)
+	saldos[1] = valorToText(s.Atual)
+	saldos[2] = valorToText(s.Empenhado)
+	saldos[3] = valorToText(-s.Liquidado)
+	saldos[4] = valorToText(-s.Anulado)
 
 	return saldos
 }
@@ -249,15 +249,24 @@ func (s Saldo) toTextArray() [5]string {
 func (cnt *Contrato) setSaldos() {
 	saldoRP := 0.0
 	saldoATUAL := 0.0
+	empenhado := 0.0
+	liquidado := 0.0
+	anulado := 0.0
 
 	for _, emp := range cnt.Empenhos {
 		emp.setSaldos()
 		saldoRP += emp.Saldo.RP
 		saldoATUAL += emp.Saldo.Atual
+		empenhado += emp.Empenhado
+		liquidado += emp.Liquidado
+		anulado += emp.Anulado
 	}
 
 	cnt.Saldo.RP = saldoRP
 	cnt.Saldo.Atual = saldoATUAL
+	cnt.Saldo.Empenhado = empenhado
+	cnt.Saldo.Liquidado = liquidado
+	cnt.Saldo.Anulado = anulado
 
 	fmt.Println()
 }
@@ -269,16 +278,8 @@ func (emp *Empenho) setSaldos() {
 	anoAtual := time.Now().Local().Year()
 	saldos := [9]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 	for _, v := range emp.Transacoes {
-
-		/*
-			if v.Empenho >= 0 {
-				saldos[0] += v.Empenhado
-			} else {
-				saldos[1] += v.Empenhado
-			}
-		*/
 		saldos[0] += v.Empenhado
-		saldos[1] += v.Anulado
+		saldos[1] -= v.Anulado
 
 		saldos[2] += v.Liquidado
 		saldos[3] += v.RpInscrito
@@ -318,7 +319,7 @@ func (emp *Empenho) setSaldos() {
 
 	emp.Saldo.Empenhado = saldos[0]
 	emp.Saldo.Anulado = saldos[1]
-	emp.Saldo.Liquidado = saldos[2]
+	emp.Saldo.Liquidado = saldos[0] - saldos[1] - saldoRP - saldoATUAL
 
 	rp := strconv.FormatFloat(emp.Saldo.RP, 'f', 2, 32)
 	rp = strings.Repeat(" ", 15-len(rp)) + rp
@@ -341,7 +342,11 @@ func gravarResumido(chaves []string, writer *csv.Writer) {
 			c.Numero,
 			"",
 			saldos[0],
-			saldos[1]}
+			saldos[1],
+			"",
+			saldos[2],
+			saldos[3],
+			saldos[4]}
 
 		writer.Write(registro)
 	}
