@@ -335,6 +335,11 @@ func (emp *Empenho) setSaldos() {
 		strconv.FormatFloat(emp.Saldo.Atual, 'f', 2, 32))
 }
 
+func gravarCabecalho(writer *csv.Writer) {
+	writer.Write([]string{"DETALHADO", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
+		"Empenhado Atual+RP", "RP reinsc", "Liquidado", "Anulado"})
+}
+
 func gravarResumido(chaves []string, writer *csv.Writer) {
 	for _, k := range chaves {
 		fmt.Println(k)
@@ -360,9 +365,6 @@ func gravarResumido(chaves []string, writer *csv.Writer) {
 }
 
 func gravarDetalhado(chaves []string, writer *csv.Writer) {
-	writer.Write([]string{"DETALHADO", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
-		"Empenhado", "Reinscrito", "Liquidado", "Anulado"})
-	writer.Write([]string{})
 	for _, kc := range chaves {
 		fmt.Println(kc)
 		c := contratos[kc]
@@ -408,20 +410,21 @@ func gravarSaldos() {
 	writer.Comma = ';'
 	defer writer.Flush()
 
-	registro := []string{
-		"UGE",
-		"PRJ",
-		"Numero",
-		"ND",
-		"Saldo RP",
-		"Saldo Exerc Atual",
-		"",
-		"Empenhado",
-		"Reinscrito",
-		"Liquidado",
-		"Anulado"}
-
-	writer.Write(registro)
+	/*
+		registro := []string{
+			"UGE",
+			"PRJ",
+			"Numero",
+			"ND",
+			"Saldo RP",
+			"Saldo Exerc Atual",
+			"",
+			"Atual+RP",
+			"RP reinscr",
+			"Liquidado",
+			"Anulado"}
+		writer.Write(registro)
+	*/
 
 	chaves := make([]string, 0, len(contratos)) // ordenação
 	for k := range contratos {
@@ -429,8 +432,10 @@ func gravarSaldos() {
 	}
 	sort.Strings(chaves)
 
+	gravarCabecalho(writer)
 	gravarResumido(chaves, writer)
 	writer.Write([]string{}) // pula linha
+	gravarCabecalho(writer)
 	gravarDetalhado(chaves, writer)
 }
 
