@@ -337,7 +337,7 @@ func (emp *Empenho) setSaldos() {
 
 func gravarCabecalho(writer *csv.Writer) {
 	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
-		"Empenhado Atual+RP", "RP reinsc atual", "Liquidado", "Anulado"})
+		"Empenhado", "RP reinsc atual", "Liquidado", "Anulado"})
 }
 
 func gravarResumido(chaves []string, writer *csv.Writer) {
