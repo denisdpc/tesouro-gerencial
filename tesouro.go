@@ -234,14 +234,20 @@ func valorToText(valor float64) string {
 }
 
 // retorna um array de strings formatado [RP,Atual]
-func (s Saldo) toTextArray() [5]string {
-	var saldos [5]string
+func (s Saldo) toTextArray() [6]string {
+	var saldos [6]string
 
 	saldos[0] = valorToText(s.RP)
 	saldos[1] = valorToText(s.Atual)
 	saldos[2] = valorToText(s.Empenhado)
-	saldos[3] = valorToText(-s.Liquidado)
-	saldos[4] = valorToText(-s.Anulado)
+	if s.Liquidado < 0 {
+		saldos[3] = valorToText(-s.Liquidado)
+		saldos[4] = "0"
+	} else {
+		saldos[3] = "0"
+		saldos[4] = valorToText(s.Liquidado)
+	}
+	saldos[5] = valorToText(s.Anulado)
 
 	return saldos
 }
@@ -317,8 +323,8 @@ func (emp *Empenho) setSaldos() {
 	emp.Saldo.RP = saldoRP
 	emp.Saldo.Atual = saldoATUAL
 
-	emp.Saldo.Empenhado = saldos[0]
-	emp.Saldo.Anulado = saldos[1]
+	emp.Saldo.Empenhado = saldos[0] // valor integral empenhado
+	emp.Saldo.Anulado = saldos[1]   // valor anulado no empenhp
 	emp.Saldo.Liquidado = saldos[0] - saldos[1] - saldoRP - saldoATUAL
 
 	rp := strconv.FormatFloat(emp.Saldo.RP, 'f', 2, 32)
@@ -346,14 +352,16 @@ func gravarResumido(chaves []string, writer *csv.Writer) {
 			"",
 			saldos[2],
 			saldos[3],
-			saldos[4]}
+			saldos[4],
+			saldos[5]}
 
 		writer.Write(registro)
 	}
 }
 
 func gravarDetalhado(chaves []string, writer *csv.Writer) {
-	writer.Write([]string{"Detalhado"})
+	writer.Write([]string{"DETALHADO", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
+		"Empenhado", "Reinscrito", "Liquidado", "Anulado"})
 	writer.Write([]string{})
 	for _, kc := range chaves {
 		fmt.Println(kc)
@@ -380,7 +388,8 @@ func gravarDetalhado(chaves []string, writer *csv.Writer) {
 				"",
 				saldos[2],
 				saldos[3],
-				saldos[4]}
+				saldos[4],
+				saldos[5]}
 
 			writer.Write(registro)
 		}
@@ -408,6 +417,7 @@ func gravarSaldos() {
 		"Saldo Exerc Atual",
 		"",
 		"Empenhado",
+		"Reinscrito",
 		"Liquidado",
 		"Anulado"}
 
