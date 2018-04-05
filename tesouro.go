@@ -336,8 +336,8 @@ func (emp *Empenho) setSaldos() {
 }
 
 func gravarCabecalho(writer *csv.Writer) {
-	writer.Write([]string{"DETALHADO", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
-		"Empenhado Atual+RP", "RP reinsc", "Liquidado", "Anulado"})
+	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
+		"Empenhado Atual+RP", "RP reinsc atual", "Liquidado", "Anulado"})
 }
 
 func gravarResumido(chaves []string, writer *csv.Writer) {
@@ -375,6 +375,7 @@ func gravarDetalhado(chaves []string, writer *csv.Writer) {
 			c.Projeto,
 			c.Numero}
 
+		gravarCabecalho(writer)
 		writer.Write(registro)
 
 		for _, ke := range c.Empenhos {
@@ -410,22 +411,6 @@ func gravarSaldos() {
 	writer.Comma = ';'
 	defer writer.Flush()
 
-	/*
-		registro := []string{
-			"UGE",
-			"PRJ",
-			"Numero",
-			"ND",
-			"Saldo RP",
-			"Saldo Exerc Atual",
-			"",
-			"Atual+RP",
-			"RP reinscr",
-			"Liquidado",
-			"Anulado"}
-		writer.Write(registro)
-	*/
-
 	chaves := make([]string, 0, len(contratos)) // ordenação
 	for k := range contratos {
 		chaves = append(chaves, k) // UGE, PROJ, CNT.NUMERO
@@ -435,7 +420,7 @@ func gravarSaldos() {
 	gravarCabecalho(writer)
 	gravarResumido(chaves, writer)
 	writer.Write([]string{}) // pula linha
-	gravarCabecalho(writer)
+	//gravarCabecalho(writer)
 	gravarDetalhado(chaves, writer)
 }
 
