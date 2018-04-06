@@ -170,6 +170,7 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 	reader.Comma = ';'
 
 	primeiraLinha := true
+	anoAtual := time.Now().Local().Year()
 
 	for {
 		linha, err := reader.Read()
@@ -202,8 +203,7 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 		liq := extrairValor(linha[colLiq]) // DESPESAS LIQUIDADAS (31)
 
 		var rpInscr, rpReinscr float64
-		t := time.Now().Local()
-		if ano == t.Year() { // desconsidera RP gerados em anos anteriores ao atual
+		if ano == anoAtual { // desconsidera RP gerados em anos anteriores ao atual
 			rpInscr = extrairValor(linha[colRpInsc])      // RP INSCRITO (40)
 			rpReinscr = extrairValor(linha[colRpReinscr]) // RP REINSCRITO (41)
 		}
