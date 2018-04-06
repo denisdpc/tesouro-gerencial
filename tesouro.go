@@ -14,8 +14,12 @@ import (
 )
 
 type Saldo struct {
-	RP          float64
-	Atual       float64
+	RP    float64
+	Atual float64
+	Resumido
+}
+
+type Resumido struct {
 	Empenhado   float64
 	EmpenhadoRP float64
 	Liquidado   float64
@@ -41,15 +45,14 @@ type Empenho struct {
 }
 
 type Transacao struct {
-	Ano       int
-	Empenhado float64 // DESPESAS EMPENHADAS (29)
-	Anulado   float64
-	Liquidado float64 // DESPESAS LIQUIDADAS (31)
+	Ano int
 
 	RpInscrito   float64 // RP INSCRITO (40)
 	RpReinscrito float64 // RP REINSCRITO (41)
 	RpCancelado  float64 // RP CANCELADO (42)
 	RpLiquidado  float64 // RP LIQUIDADO (44)
+
+	Resumido
 }
 
 var colAno, colNumEmp, colEmp, colLiq, colNd int       // colunas
@@ -193,9 +196,13 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 		ano, _ := strconv.Atoi(linha[colAno]) // ANO DA TRANSAÇÃO (0)
 
 		aux := extrairValor(linha[colEmp]) // DESPESAS EMPENHADAS (29)
-		var emp, anul float64
+		var emp, empRP, anul float64
 		if aux >= 0 {
-			emp = aux
+			if ano == anoAtual {
+				emp = aux
+			} else {
+				empRP = aux
+			}
 		} else {
 			anul = aux
 		}
@@ -214,10 +221,12 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 		nd := linha[colNd] // NATUREZA DE DESPESA
 
 		transacao := Transacao{
-			Ano:          ano,
-			Empenhado:    emp,
-			Anulado:      anul,
-			Liquidado:    liq,
+			Ano: ano,
+			Resumido: Resumido{
+				Empenhado:   emp,
+				EmpenhadoRP: empRP,
+				Anulado:     anul,
+				Liquidado:   liq},
 			RpInscrito:   rpInscr,
 			RpReinscrito: rpReinscr,
 			RpCancelado:  rpCancel,
@@ -235,45 +244,44 @@ func valorToText(valor float64) string {
 }
 
 // retorna um array de strings formatado [RP,Atual]
-func (s Saldo) toTextArray() [6]string {
-	var saldos [6]string
+func (s Saldo) toTextArray() [7]string {
+	var saldos [7]string
 
 	saldos[0] = valorToText(s.RP)
 	saldos[1] = valorToText(s.Atual)
 	saldos[2] = valorToText(s.Empenhado)
-	if s.Liquidado < 0 {
-		saldos[3] = valorToText(-s.Liquidado)
-		saldos[4] = "0"
+	saldos[3] = valorToText(s.EmpenhadoRP)
+	if s.Resumido.Liquidado < 0 {
+		saldos[4] = valorToText(-s.Liquidado)
+		saldos[5] = "0"
 	} else {
-		saldos[3] = "0"
-		saldos[4] = valorToText(s.Liquidado)
+		saldos[4] = "0"
+		saldos[5] = valorToText(s.Liquidado)
 	}
-	saldos[5] = valorToText(s.Anulado)
+	saldos[6] = valorToText(s.Anulado)
 
 	return saldos
 }
 
 func (cnt *Contrato) setSaldos() {
-	saldoRP := 0.0
-	saldoATUAL := 0.0
-	empenhado := 0.0
-	liquidado := 0.0
-	anulado := 0.0
+	var saldoRP, saldoATUAL, empenhado, empenhadoRP, liquidado, anulado float64
 
 	for _, emp := range cnt.Empenhos {
 		emp.setSaldos()
 		saldoRP += emp.Saldo.RP
 		saldoATUAL += emp.Saldo.Atual
 		empenhado += emp.Empenhado
+		empenhadoRP += emp.EmpenhadoRP
 		liquidado += emp.Liquidado
 		anulado += emp.Anulado
 	}
 
-	cnt.Saldo.RP = saldoRP
-	cnt.Saldo.Atual = saldoATUAL
-	cnt.Saldo.Empenhado = empenhado
-	cnt.Saldo.Liquidado = liquidado
-	cnt.Saldo.Anulado = anulado
+	cnt.RP = saldoRP
+	cnt.Atual = saldoATUAL
+	cnt.Empenhado = empenhado
+	cnt.EmpenhadoRP = empenhadoRP
+	cnt.Liquidado = liquidado
+	cnt.Anulado = anulado
 
 	fmt.Println()
 }
@@ -283,28 +291,28 @@ func (cnt *Contrato) setSaldos() {
 // (6) rp_liq_exerc_atual, (7) rp_cancel_exerc_atual
 func (emp *Empenho) setSaldos() {
 	anoAtual := time.Now().Local().Year()
-	saldos := [9]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
-	for _, v := range emp.Transacoes {
-		saldos[0] += v.Empenhado
-		saldos[1] -= v.Anulado
-
-		saldos[2] += v.Liquidado
-		saldos[3] += v.RpInscrito
-		saldos[4] += v.RpReinscrito
-		if anoAtual > v.Ano { // execução de RP no ano anterior
-			saldos[5] += v.RpLiquidado
-			saldos[6] += v.RpCancelado
-		} else { // execução de RP no ano atual
-			saldos[7] += v.RpLiquidado
-			saldos[8] += v.RpCancelado
+	saldos := [10]float64{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+	for _, transacao := range emp.Transacoes {
+		if anoAtual > transacao.Ano { // execução ano anterior
+			saldos[1] += transacao.EmpenhadoRP
+			saldos[6] += transacao.RpLiquidado
+			saldos[7] += transacao.RpCancelado
+		} else { // execução ano atual
+			saldos[0] += transacao.Empenhado
+			saldos[8] += transacao.RpLiquidado
+			saldos[9] += transacao.RpCancelado
 		}
+		saldos[2] -= transacao.Anulado
+		saldos[3] += transacao.Liquidado
+		saldos[4] += transacao.RpInscrito
+		saldos[5] += transacao.RpReinscrito
 	}
 
 	saldoRP := 0.0
 	saldoATUAL := 0.0
 
-	rpInscrito := saldos[3]
-	rpReinscrito := saldos[4]
+	rpInscrito := saldos[4]
+	rpReinscrito := saldos[5]
 
 	if rpReinscrito > 0 || rpInscrito > 0 { // cálculo de saldo
 		if rpReinscrito > 0 {
@@ -312,21 +320,22 @@ func (emp *Empenho) setSaldos() {
 		} else {
 			saldoRP = rpInscrito
 		}
-		rpLiqExercAtual := saldos[7]
-		rpCancelExercAtual := saldos[8]
+		rpLiqExercAtual := saldos[8]
+		rpCancelExercAtual := saldos[9]
 		saldoRP -= rpLiqExercAtual + rpCancelExercAtual
 	} else {
-		empenhado := saldos[0] + saldos[1]
-		liquidado := saldos[2]
+		empenhado := saldos[0] + saldos[1] + saldos[2]
+		liquidado := saldos[3]
 		saldoATUAL = empenhado - liquidado
 	}
 
-	emp.Saldo.RP = saldoRP
-	emp.Saldo.Atual = saldoATUAL
+	emp.RP = saldoRP
+	emp.Atual = saldoATUAL
 
-	emp.Saldo.Empenhado = saldos[0] // valor integral empenhado
-	emp.Saldo.Anulado = saldos[1]   // valor anulado no empenhp
-	emp.Saldo.Liquidado = saldos[0] - saldos[1] - saldoRP - saldoATUAL
+	emp.Empenhado = saldos[0]   // valor empenhado atual
+	emp.EmpenhadoRP = saldos[1] // valor empenhado RP
+	emp.Anulado = saldos[2]     // valor anulado no empenho
+	emp.Liquidado = saldos[0] + saldos[1] - saldos[2] - saldoRP - saldoATUAL
 
 	rp := strconv.FormatFloat(emp.Saldo.RP, 'f', 2, 32)
 	rp = strings.Repeat(" ", 15-len(rp)) + rp
@@ -338,7 +347,7 @@ func (emp *Empenho) setSaldos() {
 
 func gravarCabecalho(writer *csv.Writer) {
 	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
-		"Empenhado", "RP reinsc atual", "Liquidado", "Anulado"})
+		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"})
 }
 
 func gravarResumido(chaves []string, writer *csv.Writer) {
@@ -359,7 +368,8 @@ func gravarResumido(chaves []string, writer *csv.Writer) {
 			saldos[2],
 			saldos[3],
 			saldos[4],
-			saldos[5]}
+			saldos[5],
+			saldos[6]}
 
 		writer.Write(registro)
 	}
@@ -393,7 +403,8 @@ func gravarDetalhado(chaves []string, writer *csv.Writer) {
 				saldos[2],
 				saldos[3],
 				saldos[4],
-				saldos[5]}
+				saldos[5],
+				saldos[6]}
 
 			writer.Write(registro)
 		}
@@ -421,7 +432,6 @@ func gravarSaldos() {
 	gravarCabecalho(writer)
 	gravarResumido(chaves, writer)
 	writer.Write([]string{}) // pula linha
-	//gravarCabecalho(writer)
 	gravarDetalhado(chaves, writer)
 }
 
