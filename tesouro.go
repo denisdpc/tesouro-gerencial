@@ -55,6 +55,11 @@ type Transacao struct {
 	Resumido
 }
 
+type Projeto struct {
+	sigla            string
+	creditoAcumulado float64 // Valor acumulado da coluna CREDITO DISPONIVEL
+}
+
 var colAno, colNumEmp, colEmp, colLiq, colNd int       // colunas
 var colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
 var uge map[string]string                              // inicio do empenho corresponente à UGE
@@ -72,7 +77,8 @@ func setup() {
 }
 
 // ler arquivo empenhos.txt para obter empenhos de interesse
-func popularEmpenhos() map[string]*Empenho {
+// retorna map(numEmpenho) -> empenho
+func lerArqEmpenhos() map[string]*Empenho {
 	file, err := os.Open("empenhos.txt")
 	if err != nil {
 		log.Fatal(err)
@@ -444,7 +450,8 @@ func pressionarTecla() { // utilizar para testes
 
 func main() {
 	setup()
-	mapEmpenhos := popularEmpenhos() // string,*Empenho
+	mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
+	// mapProjetos := lerArqPI() // string(PI),Projeto
 	adicionarTransacoes(mapEmpenhos)
 	gravarSaldos()
 }
