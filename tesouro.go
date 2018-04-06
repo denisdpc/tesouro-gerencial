@@ -14,11 +14,12 @@ import (
 )
 
 type Saldo struct {
-	RP        float64
-	Atual     float64
-	Empenhado float64
-	Liquidado float64
-	Anulado   float64
+	RP          float64
+	Atual       float64
+	Empenhado   float64
+	EmpenhadoRP float64
+	Liquidado   float64
+	Anulado     float64
 }
 
 type Contrato struct {
