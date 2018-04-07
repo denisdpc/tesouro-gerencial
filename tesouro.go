@@ -56,19 +56,21 @@ type Transacao struct {
 }
 
 type Projeto struct {
-	sigla            string
-	creditoAcumulado float64 // Valor acumulado da coluna CREDITO DISPONIVEL
+	PI    string
+	sigla string // sigla do projet
+	ND    string // natureza da despesa
+
+	creditosUGE map[string]float64 // uge -->credito acumulado
 }
 
-var colAno, colNumEmp, colEmp, colLiq, colNd int       // colunas
-var colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
-var uge map[string]string                              // inicio do empenho corresponente à UGE
-var contratos map[string]*Contrato                     // mapa com os contratos
+var colAno, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int    // colunas
+var colCredito, colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
+var uge map[string]string                                          // inicio do empenho corresponente à UGE
+var contratos map[string]*Contrato                                 // mapa com os contratos
+var projetos map[string]*Projeto
 
 func setup() {
-
-	// início do número de empenho de acordo com a UGE
-	uge = map[string]string{
+	uge = map[string]string{ // início do número de empenho de acordo com a UGE
 		"GAL":    "12019500001",
 		"GAP-SP": "12063300001",
 		"CABE":   "12009100001",
@@ -76,13 +78,37 @@ func setup() {
 		"CELOG":  "12007100001"}
 }
 
-// ler arquivo empenhos.txt para obter empenhos de interesse
-// retorna map(numEmpenho) -> empenho
-func lerArqEmpenhos() map[string]*Empenho {
-	file, err := os.Open("empenhos.txt")
+func lerArq(arq string) *os.File {
+	file, err := os.Open(arq)
 	if err != nil {
 		log.Fatal(err)
 	}
+	return file
+}
+
+// ler arquivo PI.txt
+// retorna map(projeto) -> PI
+func lerArqPI() map[string]*Projeto {
+	file := lerArq("PI.txt")
+	defer file.Close()
+
+	projetos = make(map[string]*Projeto)
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		aux := strings.Split(scanner.Text(), ":")
+		if len(aux) == 2 {
+			proj := Projeto{PI: aux[0], sigla: strings.Trim(aux[1], " ")}
+			projetos[aux[0]] = &proj
+		}
+	}
+	return projetos
+}
+
+// ler arquivo empenhos.txt
+// retorna map(numEmpenho) -> empenho
+func lerArqEmpenhos() map[string]*Empenho {
+	file := lerArq("empenhos.txt")
 	defer file.Close()
 
 	empenhos := make(map[string]*Empenho)
@@ -150,12 +176,18 @@ func setarCampos(linha []string) {
 	for _, l := range linha {
 
 		switch col := l; col {
+		case "UG Executora":
+			colUGE = cont
 		case "DESPESAS EMPENHADAS (CONTROLE EMPENHO)":
 			colEmp = cont
+		case "PI":
+			colPI = cont
 		case "Natureza Despesa":
 			colNd = cont
 		case "Nota Empenho CCor":
 			colNumEmp = cont
+		case "CREDITO DISPONIVEL":
+			colCredito = cont
 		case "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)":
 			colLiq = cont
 		case "RESTOS A PAGAR NAO PROCESSADOS INSCRITOS":
@@ -172,8 +204,12 @@ func setarCampos(linha []string) {
 	colAno = 0
 }
 
-// ler arquivo em CSV do Tesouro Gerencial para adicionar transaçoes no empenho
-func adicionarTransacoes(empenhos map[string]*Empenho) {
+// ler arquivo em CSV do Tesouro Gerencial
+// para adicionar transaçoes no empenho e
+// crédito nos projetos
+func lerArqTesouro(empenhos map[string]*Empenho,
+	projetos map[string]*Projeto) {
+
 	csvFile, _ := os.Open("tesouro.csv")
 	reader := csv.NewReader(bufio.NewReader(csvFile))
 	reader.Comma = ';'
@@ -194,12 +230,22 @@ func adicionarTransacoes(empenhos map[string]*Empenho) {
 			setarCampos(linha)
 		}
 
+		ano, _ := strconv.Atoi(linha[colAno]) // ANO DA TRANSAÇÃO (0)
+
 		empenho, temEmpenho := empenhos[linha[colNumEmp]]
 		if !temEmpenho {
+			if ano == anoAtual {
+				if projeto, temPI := projetos[linha[colPI]]; temPI {
+					uge, credito := linha[colUGE], extrairValor(linha[colCredito])
+					if projeto.creditosUGE == nil {
+						projeto.creditosUGE = make(map[string]float64)
+					}
+					projeto.creditosUGE[uge] += credito
+					projeto.ND = linha[colNd]
+				}
+			}
 			continue
 		}
-
-		ano, _ := strconv.Atoi(linha[colAno]) // ANO DA TRANSAÇÃO (0)
 
 		aux := extrairValor(linha[colEmp]) // DESPESAS EMPENHADAS (29)
 		var emp, empRP, anul float64
@@ -288,8 +334,6 @@ func (cnt *Contrato) setSaldos() {
 	cnt.EmpenhadoRP = empenhadoRP
 	cnt.Liquidado = liquidado
 	cnt.Anulado = anulado
-
-	fmt.Println()
 }
 
 // (0) emp, (1) liq, (2) rp_inscr, (3) rp_reinscr,
@@ -346,19 +390,21 @@ func (emp *Empenho) setSaldos() {
 	rp := strconv.FormatFloat(emp.Saldo.RP, 'f', 2, 32)
 	rp = strings.Repeat(" ", 15-len(rp)) + rp
 
-	fmt.Println(emp.Numero, "\t",
-		rp, "\t\t\t",
-		strconv.FormatFloat(emp.Saldo.Atual, 'f', 2, 32))
+	/*
+		fmt.Println(emp.Numero, "\t",
+			rp, "\t\t\t",
+			strconv.FormatFloat(emp.Saldo.Atual, 'f', 2, 32))
+	*/
 }
 
-func gravarCabecalho(writer *csv.Writer) {
+func gravarContratosCabecalho(writer *csv.Writer) {
 	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
 		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"})
 }
 
-func gravarResumido(chaves []string, writer *csv.Writer) {
+func gravarContratosResumido(chaves []string, writer *csv.Writer) {
 	for _, k := range chaves {
-		fmt.Println(k)
+		//fmt.Println(k)
 		c := contratos[k]
 		c.setSaldos()
 		saldos := c.Saldo.toTextArray()
@@ -381,9 +427,9 @@ func gravarResumido(chaves []string, writer *csv.Writer) {
 	}
 }
 
-func gravarDetalhado(chaves []string, writer *csv.Writer) {
+func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
 	for _, kc := range chaves {
-		fmt.Println(kc)
+		//fmt.Println(kc)
 		c := contratos[kc]
 		c.setSaldos()
 
@@ -392,7 +438,7 @@ func gravarDetalhado(chaves []string, writer *csv.Writer) {
 			c.Projeto,
 			c.Numero}
 
-		gravarCabecalho(writer)
+		gravarContratosCabecalho(writer)
 		writer.Write(registro)
 
 		for _, ke := range c.Empenhos {
@@ -418,6 +464,21 @@ func gravarDetalhado(chaves []string, writer *csv.Writer) {
 	}
 }
 
+func gravarCreditosNaoEmpenhados(writer *csv.Writer) {
+	writer.Write([]string{"UGE", "PRJ", "PI", "ND", "Credito"})
+
+	for PI, projeto := range projetos {
+		for uge, credito := range projeto.creditosUGE {
+			registro := []string{uge,
+				projeto.sigla,
+				PI,
+				projeto.ND,
+				valorToText(credito)}
+			writer.Write(registro)
+		}
+	}
+}
+
 func gravarSaldos() {
 	t := time.Now().Local()
 	arq := "db/saldos " + t.Format("2006-01-02") + ".csv"
@@ -435,10 +496,13 @@ func gravarSaldos() {
 	}
 	sort.Strings(chaves)
 
-	gravarCabecalho(writer)
-	gravarResumido(chaves, writer)
+	gravarContratosCabecalho(writer)
+	gravarContratosResumido(chaves, writer)
 	writer.Write([]string{}) // pula linha
-	gravarDetalhado(chaves, writer)
+	gravarCreditosNaoEmpenhados(writer)
+	writer.Write([]string{}) // pula linha
+	writer.Write([]string{}) // pula linha
+	gravarContratosDetalhado(chaves, writer)
 }
 
 func pressionarTecla() { // utilizar para testes
@@ -450,8 +514,15 @@ func pressionarTecla() { // utilizar para testes
 
 func main() {
 	setup()
+	mapProjetos := lerArqPI()       // string(PI),Projeto
 	mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
-	// mapProjetos := lerArqPI() // string(PI),Projeto
-	adicionarTransacoes(mapEmpenhos)
+	lerArqTesouro(mapEmpenhos, mapProjetos)
+
 	gravarSaldos()
+
+	/*
+		for PI, projeto := range projetos {
+			fmt.Println(PI, projeto)
+		}
+	*/
 }
