@@ -429,7 +429,6 @@ func gravarContratosResumido(chaves []string, writer *csv.Writer) {
 
 func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
 	for _, kc := range chaves {
-		//fmt.Println(kc)
 		c := contratos[kc]
 		c.setSaldos()
 
@@ -519,10 +518,4 @@ func main() {
 	lerArqTesouro(mapEmpenhos, mapProjetos)
 
 	gravarSaldos()
-
-	/*
-		for PI, projeto := range projetos {
-			fmt.Println(PI, projeto)
-		}
-	*/
 }
