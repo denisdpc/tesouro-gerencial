@@ -68,8 +68,8 @@ var colAno, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int    // colunas
 var colCredito, colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
 var uge map[string]string                                          // inicio do empenho corresponente à UGE
 var contratos map[string]*Contrato                                 // mapa com os contratos
-var projetos map[string]*Projeto
-var creditos map[[3]string]float64 //// pi,uge,nd -->credito acumulado
+var projetos map[string]*Projeto                                   // pi --> projeto
+var creditos map[[3]string]float64                                 // pi,uge,nd -->credito acumulado
 
 func setup() {
 	uge = map[string]string{ // início do número de empenho de acordo com a UGE
@@ -478,12 +478,15 @@ func gravarCreditosNaoEmpenhados(writer *csv.Writer) {
 		if credito == 0 {
 			continue
 		}
+
+		projeto := projetos[chave[0]]
 		registro := []string{chave[1],
-			"",
-			chave[0],
-			chave[2],
+			projeto.sigla,
+			chave[0], // UGE
+			chave[2], // ND
 			valorToText(credito)}
 		writer.Write(registro)
+
 	}
 }
 
