@@ -58,9 +58,10 @@ type Transacao struct {
 type Projeto struct {
 	PI    string
 	sigla string // sigla do projet
-	ND    string // natureza da despesa
+	//ND    string // natureza da despesa
 
-	creditosUGE map[string]float64 // uge -->credito acumulado
+	//creditos map[[2]string]float64 // uge,nd -->credito acumulado
+	//creditosUGE map[string]float64 // uge -->credito acumulado
 }
 
 var colAno, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int    // colunas
@@ -68,6 +69,7 @@ var colCredito, colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
 var uge map[string]string                                          // inicio do empenho corresponente à UGE
 var contratos map[string]*Contrato                                 // mapa com os contratos
 var projetos map[string]*Projeto
+var creditos map[[3]string]float64 //// pi,uge,nd -->credito acumulado
 
 func setup() {
 	uge = map[string]string{ // início do número de empenho de acordo com a UGE
@@ -235,13 +237,20 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 		empenho, temEmpenho := empenhos[linha[colNumEmp]]
 		if !temEmpenho {
 			if ano == anoAtual {
-				if projeto, temPI := projetos[linha[colPI]]; temPI {
-					uge, credito := linha[colUGE], extrairValor(linha[colCredito])
-					if projeto.creditosUGE == nil {
-						projeto.creditosUGE = make(map[string]float64)
+				pi := linha[colPI]
+				if _, temPI := projetos[pi]; temPI {
+					valor := extrairValor(linha[colCredito])
+					if valor == 0 {
+						continue
 					}
-					projeto.creditosUGE[uge] += credito
-					projeto.ND = linha[colNd]
+					uge := linha[colUGE]
+					nd := linha[colNd]
+
+					if creditos == nil {
+						creditos = make(map[[3]string]float64)
+					}
+					chave := [3]string{pi, uge, nd}
+					creditos[chave] += valor
 				}
 			}
 			continue
@@ -287,7 +296,6 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 		empenho.Transacoes = append(empenho.Transacoes, &transacao)
 		empenho.ND = nd
 	}
-
 }
 
 func valorToText(valor float64) string {
@@ -466,15 +474,16 @@ func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
 func gravarCreditosNaoEmpenhados(writer *csv.Writer) {
 	writer.Write([]string{"UGE", "PRJ", "PI", "ND", "Credito"})
 
-	for PI, projeto := range projetos {
-		for uge, credito := range projeto.creditosUGE {
-			registro := []string{uge,
-				projeto.sigla,
-				PI,
-				projeto.ND,
-				valorToText(credito)}
-			writer.Write(registro)
+	for chave, credito := range creditos {
+		if credito == 0 {
+			continue
 		}
+		registro := []string{chave[1],
+			"",
+			chave[0],
+			chave[2],
+			valorToText(credito)}
+		writer.Write(registro)
 	}
 }
 
