@@ -487,20 +487,11 @@ func gravarCreditosNaoEmpenhados(writer *csv.Writer) {
 		if credito == 0 {
 			continue
 		}
-<<<<<<< HEAD
 		projeto := projetos[c[0]]
 		registro := []string{c[1], // uge
 			projeto.sigla,
 			c[0], // PI
 			c[2], // nd
-=======
-
-		projeto := projetos[chave[0]]
-		registro := []string{chave[1],
-			projeto.sigla,
-			chave[0], // UGE
-			chave[2], // ND
->>>>>>> c2fdf51e3de52f1ef33793aa9b0a6875596f1713
 			valorToText(credito)}
 		writer.Write(registro)
 
