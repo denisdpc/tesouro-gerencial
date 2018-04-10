@@ -58,10 +58,6 @@ type Transacao struct {
 type Projeto struct {
 	PI    string
 	sigla string // sigla do projet
-	//ND    string // natureza da despesa
-
-	//creditos map[[2]string]float64 // uge,nd -->credito acumulado
-	//creditosUGE map[string]float64 // uge -->credito acumulado
 }
 
 var colAno, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int    // colunas
