@@ -230,23 +230,31 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 
 		ano, _ := strconv.Atoi(linha[colAno]) // ANO DA TRANSAÇÃO (0)
 
-		empenho, temEmpenho := empenhos[linha[colNumEmp]]
+		empNumero := linha[colNumEmp]
+		empenho, temEmpenho := empenhos[empNumero]
 		if !temEmpenho {
-			if ano == anoAtual {
+			if empNumero == "-9" { // contabilizar credito
+				if ano == anoAtual {
+					pi := linha[colPI]
+					if _, temPI := projetos[pi]; temPI {
+						valor := extrairValor(linha[colCredito])
+						if valor == 0 {
+							continue
+						}
+						uge := linha[colUGE]
+						nd := linha[colNd]
+
+						if creditos == nil {
+							creditos = make(map[[3]string]float64)
+						}
+						chave := [3]string{pi, uge, nd}
+						creditos[chave] += valor
+					}
+				}
+			} else { // contabilizar outros empenhos com PI de interesse
 				pi := linha[colPI]
 				if _, temPI := projetos[pi]; temPI {
-					valor := extrairValor(linha[colCredito])
-					if valor == 0 {
-						continue
-					}
-					uge := linha[colUGE]
-					nd := linha[colNd]
-
-					if creditos == nil {
-						creditos = make(map[[3]string]float64)
-					}
-					chave := [3]string{pi, uge, nd}
-					creditos[chave] += valor
+					fmt.Println(projetos[pi].sigla, empNumero)
 				}
 			}
 			continue
