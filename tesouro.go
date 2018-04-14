@@ -63,7 +63,7 @@ type Projeto struct {
 var colAno, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int    // colunas
 var colCredito, colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
 var uge map[string]string                                          // inicio do empenho corresponente à UGE
-var contratos map[string]*Contrato                                 // mapa com os contratos
+var contratos map[string]*Contrato                                 // uge_completo, prj, cnt_num --> contratos
 var projetos map[string]*Projeto                                   // pi --> projeto
 var creditos map[[3]string]float64                                 // pi,uge,nd -->credito acumulado
 
@@ -105,6 +105,7 @@ func lerArqPI() map[string]*Projeto {
 
 // ler arquivo empenhos.txt
 // retorna map(numEmpenho) -> empenho
+// relaciona empenhos a contrato
 func lerArqEmpenhos() map[string]*Empenho {
 	file := lerArq("empenhos.txt")
 	defer file.Close()
@@ -231,8 +232,8 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 		ano, _ := strconv.Atoi(linha[colAno]) // ANO DA TRANSAÇÃO (0)
 
 		empNumero := linha[colNumEmp]
-		empenho, temEmpenho := empenhos[empNumero]
-		if !temEmpenho {
+		empenho, empenhoListado := empenhos[empNumero]
+		if !empenhoListado {
 			if empNumero == "-9" { // contabilizar credito
 				if ano == anoAtual {
 					pi := linha[colPI]
@@ -251,13 +252,37 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 						creditos[chave] += valor
 					}
 				}
-			} else { // contabilizar outros empenhos com PI de interesse
+				continue
+			} else {
 				pi := linha[colPI]
-				if _, temPI := projetos[pi]; temPI {
-					fmt.Println(projetos[pi].sigla, empNumero)
+				if _, piListado := projetos[pi]; piListado { // contabilizar empenho não listado em PI listado
+					ugeNumero := linha[colUGE]
+					prjSigla := projetos[pi].sigla
+
+					chave := ugeNumero + " " + prjSigla + "EXTRA"
+					if contratos[chave] == nil {
+						contratos[chave] = &Contrato{
+							Projeto: prjSigla,
+							UGE:     ugeNumero,
+							Numero:  "EXTRA"}
+					}
+
+					empenho = &Empenho{
+						Numero: empNumero,
+						ND:     linha[colNd]}
+
+					cnt := contratos[chave]
+
+					if cnt.Empenhos == nil {
+						cnt.Empenhos = make(map[string]*Empenho)
+					}
+					cnt.Empenhos[empNumero] = empenho
+					empenho.Contrato = cnt
+				} else { // empenho e PI não listado
+					continue
 				}
+				//continue // desconsiderar EXTRA
 			}
-			continue
 		}
 
 		aux := extrairValor(linha[colEmp]) // DESPESAS EMPENHADAS (29)
@@ -311,8 +336,10 @@ func valorToText(valor float64) string {
 func (s Saldo) toTextArray() [7]string {
 	var saldos [7]string
 
-	saldos[0] = valorToText(s.RP)
-	saldos[1] = valorToText(s.Atual)
+	//saldos[0] = valorToText(s.RP)
+	//saldos[1] = valorToText(s.Atual)
+	saldos[0] = valorToText(s.Atual)
+	saldos[1] = valorToText(s.RP)
 	saldos[2] = valorToText(s.Empenhado)
 	saldos[3] = valorToText(s.EmpenhadoRP)
 	if s.Resumido.Liquidado < 0 {
@@ -410,7 +437,7 @@ func (emp *Empenho) setSaldos() {
 }
 
 func gravarContratosCabecalho(writer *csv.Writer) {
-	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo RP", "Saldo Exerc Atual", "",
+	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo Exerc Atual", "Saldo RP", "",
 		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"})
 }
 
@@ -426,8 +453,8 @@ func gravarContratosResumido(chaves []string, writer *csv.Writer) {
 			c.Projeto,
 			c.Numero,
 			"",
-			saldos[0],
-			saldos[1],
+			saldos[0], // saldo Exerc Atual
+			saldos[1], // saldo RP
 			"",
 			saldos[2],
 			saldos[3],
