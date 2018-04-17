@@ -14,8 +14,8 @@ import (
 )
 
 type Saldo struct {
-	RP    float64
 	Atual float64
+	RP    float64
 	Resumido
 }
 
@@ -60,12 +60,12 @@ type Projeto struct {
 	sigla string // sigla do projet
 }
 
-var colAno, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int    // colunas
-var colCredito, colRpInsc, colRpReinscr, colRpCancel, colRpLiq int // colunas
-var uge map[string]string                                          // inicio do empenho corresponente à UGE
-var contratos map[string]*Contrato                                 // uge_completo, prj, cnt_num --> contratos
-var projetos map[string]*Projeto                                   // pi --> projeto
-var creditos map[[3]string]float64                                 // pi,uge,nd -->credito acumulado
+var colAnoTrans, colUGE, colPI, colNumEmp, colEmp, colLiq, colNd int // colunas
+var colCredito, colRpInsc, colRpReinscr, colRpCancel, colRpLiq int   // colunas
+var uge map[string]string                                            // inicio do empenho corresponente à UGE
+var contratos map[string]*Contrato                                   // uge_completo, prj, cnt_num --> contratos
+var projetos map[string]*Projeto                                     // pi --> projeto
+var creditos map[[3]string]float64                                   // pi,uge,nd -->credito acumulado
 
 func setup() {
 	uge = map[string]string{ // início do número de empenho de acordo com a UGE
@@ -200,7 +200,7 @@ func setarCampos(linha []string) {
 		}
 		cont++
 	}
-	colAno = 0
+	colAnoTrans = 0
 }
 
 // ler arquivo em CSV do Tesouro Gerencial
@@ -229,13 +229,13 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 			setarCampos(linha)
 		}
 
-		ano, _ := strconv.Atoi(linha[colAno]) // ANO DA TRANSAÇÃO (0)
+		anoTrans, _ := strconv.Atoi(linha[colAnoTrans]) // ANO DA TRANSAÇÃO (0)
 
 		empNumero := linha[colNumEmp]
 		empenho, empenhoListado := empenhos[empNumero]
 		if !empenhoListado {
 			if empNumero == "-9" { // contabilizar credito
-				if ano == anoAtual {
+				if anoTrans == anoAtual {
 					pi := linha[colPI]
 					if _, temPI := projetos[pi]; temPI {
 						valor := extrairValor(linha[colCredito])
@@ -253,31 +253,35 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 					}
 				}
 				continue
-			} else {
+			} else { // contabilizar empenho não lista em empenhos.txt
 				pi := linha[colPI]
-				if _, piListado := projetos[pi]; piListado { // contabilizar empenho não listado em PI listado
+				if _, piListado := projetos[pi]; piListado { // PI listado em PI.txt
 					ugeNumero := linha[colUGE]
 					prjSigla := projetos[pi].sigla
 
-					chave := ugeNumero + " " + prjSigla + "EXTRA"
+					chave := ugeNumero + " " + prjSigla + " EXTRA"
 					if contratos[chave] == nil {
 						contratos[chave] = &Contrato{
 							Projeto: prjSigla,
 							UGE:     ugeNumero,
 							Numero:  "EXTRA"}
-					}
 
-					empenho = &Empenho{
-						Numero: empNumero,
-						ND:     linha[colNd]}
+						cnt := contratos[chave]
+						cnt.Empenhos = make(map[string]*Empenho)
+					}
 
 					cnt := contratos[chave]
 
-					if cnt.Empenhos == nil {
-						cnt.Empenhos = make(map[string]*Empenho)
+					if cnt.Empenhos[empNumero] == nil {
+						empenho = &Empenho{
+							Numero: empNumero}
+
+						cnt.Empenhos[empNumero] = empenho
+						empenho.Contrato = cnt
+					} else {
+						empenho = cnt.Empenhos[empNumero]
 					}
-					cnt.Empenhos[empNumero] = empenho
-					empenho.Contrato = cnt
+
 				} else { // empenho e PI não listado
 					continue
 				}
@@ -285,22 +289,24 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 			}
 		}
 
-		aux := extrairValor(linha[colEmp]) // DESPESAS EMPENHADAS (29)
-		var emp, empRP, anul float64
-		if aux >= 0 {
-			if ano == anoAtual {
-				emp = aux
+		valorEmp := extrairValor(linha[colEmp])              // DESPESAS EMPENHADAS (29)
+		anoEmp, _ := strconv.Atoi((linha[colNumEmp])[11:15]) // ANO EM QUE FOI GERADO O EMPENHO
+
+		var emp, empRP, anulado float64
+		if valorEmp >= 0 {
+			if anoEmp == anoAtual {
+				emp = valorEmp
 			} else {
-				empRP = aux
+				empRP = valorEmp
 			}
 		} else {
-			anul = aux
+			anulado = valorEmp
 		}
 
 		liq := extrairValor(linha[colLiq]) // DESPESAS LIQUIDADAS (31)
 
 		var rpInscr, rpReinscr float64
-		if ano == anoAtual { // desconsidera RP gerados em anos anteriores ao atual
+		if anoTrans == anoAtual { // desconsidera RP gerados em anos anteriores ao atual
 			rpInscr = extrairValor(linha[colRpInsc])      // RP INSCRITO (40)
 			rpReinscr = extrairValor(linha[colRpReinscr]) // RP REINSCRITO (41)
 		}
@@ -311,11 +317,11 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 		nd := linha[colNd] // NATUREZA DE DESPESA
 
 		transacao := Transacao{
-			Ano: ano,
+			Ano: anoTrans,
 			Resumido: Resumido{
 				Empenhado:   emp,
 				EmpenhadoRP: empRP,
-				Anulado:     anul,
+				Anulado:     anulado,
 				Liquidado:   liq},
 			RpInscrito:   rpInscr,
 			RpReinscrito: rpReinscr,
@@ -413,7 +419,8 @@ func (emp *Empenho) setSaldos() {
 		rpCancelExercAtual := saldos[9]
 		saldoRP -= rpLiqExercAtual + rpCancelExercAtual
 	} else {
-		empenhado := saldos[0] + saldos[1] + saldos[2]
+		//empenhado := saldos[0] + saldos[1] + saldos[2]
+		empenhado := saldos[0] + saldos[1] - saldos[2]
 		liquidado := saldos[3]
 		saldoATUAL = empenhado - liquidado
 	}
@@ -467,25 +474,23 @@ func gravarContratosResumido(chaves []string, writer *csv.Writer) {
 }
 
 func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
+	gravarContratosCabecalho(writer)
+
 	for _, kc := range chaves {
 		c := contratos[kc]
 		c.setSaldos()
 
-		registro := []string{
-			c.UGE,
-			c.Projeto,
-			c.Numero}
-
-		gravarContratosCabecalho(writer)
-		writer.Write(registro)
-
 		for _, ke := range c.Empenhos {
 			saldos := ke.Saldo.toTextArray()
 
-			registro = []string{
-				"",
-				"",
-				ke.Numero,
+			if ke.Saldo.Atual+ke.Saldo.RP < 0.001 {
+				continue
+			}
+
+			registro := []string{
+				c.UGE,
+				c.Projeto,
+				c.Numero + " : " + ke.Numero,
 				ke.ND,
 				saldos[0],
 				saldos[1],
@@ -498,7 +503,7 @@ func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
 
 			writer.Write(registro)
 		}
-		writer.Write([]string{}) // pula linha
+		//writer.Write([]string{}) // pula linha
 	}
 }
 
