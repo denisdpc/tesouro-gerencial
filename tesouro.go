@@ -13,12 +13,14 @@ import (
 	"time"
 )
 
+// Saldo ...
 type Saldo struct {
 	Atual float64
 	RP    float64
 	Resumido
 }
 
+// Resumido ...
 type Resumido struct {
 	Empenhado   float64
 	EmpenhadoRP float64
@@ -26,6 +28,7 @@ type Resumido struct {
 	Anulado     float64
 }
 
+// Contrato ...
 type Contrato struct {
 	Projeto string
 	UGE     string
@@ -35,6 +38,7 @@ type Contrato struct {
 	Empenhos map[string]*Empenho
 }
 
+// Empenho ...
 type Empenho struct {
 	Numero string
 	ND     string
@@ -44,6 +48,7 @@ type Empenho struct {
 	Transacoes []*Transacao
 }
 
+// Transacao ...
 type Transacao struct {
 	Ano int
 
@@ -55,6 +60,7 @@ type Transacao struct {
 	Resumido
 }
 
+// Projeto ...
 type Projeto struct {
 	PI    string
 	sigla string // sigla do projet
