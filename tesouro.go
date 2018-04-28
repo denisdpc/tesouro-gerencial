@@ -421,7 +421,6 @@ func (emp *Empenho) setSaldos() {
 		rpCancelExercAtual := saldos[9]
 		saldoRP -= rpLiqExercAtual + rpCancelExercAtual
 	} else {
-		//empenhado := saldos[0] + saldos[1] + saldos[2]
 		empenhado := saldos[0] + saldos[1] - saldos[2]
 		liquidado := saldos[3]
 		saldoATUAL = empenhado - liquidado
