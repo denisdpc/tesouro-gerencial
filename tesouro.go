@@ -287,11 +287,9 @@ func lerArqTesouro(empenhos map[string]*Empenho,
 					} else {
 						empenho = cnt.Empenhos[empNumero]
 					}
-
 				} else { // empenho e PI não listado
 					continue
 				}
-				//continue // desconsiderar EXTRA
 			}
 		}
 
@@ -348,8 +346,6 @@ func valorToText(valor float64) string {
 func (s Saldo) toTextArray() [7]string {
 	var saldos [7]string
 
-	//saldos[0] = valorToText(s.RP)
-	//saldos[1] = valorToText(s.Atual)
 	saldos[0] = valorToText(s.Atual)
 	saldos[1] = valorToText(s.RP)
 	saldos[2] = valorToText(s.Empenhado)
@@ -455,8 +451,9 @@ func gravarContratosCabecalho(writer *csv.Writer) {
 }
 
 func gravarContratosResumido(chaves []string, writer *csv.Writer) {
+	var extras [][]string
+
 	for _, k := range chaves {
-		//fmt.Println(k)
 		c := contratos[k]
 		c.setSaldos()
 		saldos := c.Saldo.toTextArray()
@@ -475,8 +472,13 @@ func gravarContratosResumido(chaves []string, writer *csv.Writer) {
 			saldos[5],
 			saldos[6]}
 
-		writer.Write(registro)
+		if c.Numero == "EXTRA" {
+			extras = append(extras, registro)
+		} else {
+			writer.Write(registro)
+		}
 	}
+	writer.WriteAll(extras)
 }
 
 func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
