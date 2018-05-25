@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
+	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -72,6 +75,7 @@ var uge map[string]string                                            // inicio d
 var contratos map[string]*Contrato                                   // uge_completo, prj, cnt_num --> contratos
 var projetos map[string]*Projeto                                     // pi --> projeto
 var creditos map[[3]string]float64                                   // pi,uge,nd -->credito acumulado
+var tabelaTG [][]string
 
 func setup() {
 	uge = map[string]string{ // início do número de empenho de acordo com a UGE
@@ -179,7 +183,6 @@ func extrairValor(v string) float64 {
 func setarCampos(linha []string) {
 	cont := 0
 	for _, l := range linha {
-
 		switch col := l; col {
 		case "UG Executora":
 			colUGE = cont
@@ -209,32 +212,215 @@ func setarCampos(linha []string) {
 	colAnoTrans = 0
 }
 
-// ler arquivo em CSV do Tesouro Gerencial
-// para adicionar transaçoes no empenho e
-// crédito nos projetos
-func lerArqTesouro(empenhos map[string]*Empenho,
+// upload do arquivo do tesouro gerencial
+func upload(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodPost {
+		f, _, err := req.FormFile("usrfile")
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Error uploading file", http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+
+		arq, err := ioutil.ReadAll(f)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Error reading file", http.StatusInternalServerError)
+			return
+		}
+		popularTabelaTG(&arq)
+		mapProjetos := lerArqPI()       // string(PI),Projeto
+		mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
+		processarTG(mapEmpenhos, mapProjetos)
+
+		chaves := getChavesOrdenacao(contratos)
+
+		tabResumido, tabExtras := gerarTabelaResumidoExtra(chaves)
+		tabCredito := gerarTabelaCredito()
+		tabDetalhado := gerarTabelaDetalhado(chaves)
+
+		tabCabecalhoEmpenhado := getCabecalhoEmpenhado()
+		tabCabecalhoCredito := getCabecalhoCredito()
+
+		linha := &[][]string{{}}
+		content := bytes.NewReader(
+			tabelasToByteArray(
+				tabCabecalhoEmpenhado, tabResumido, tabExtras,
+				linha, tabCabecalhoCredito, tabCredito,
+				linha, tabCabecalhoEmpenhado, tabDetalhado))
+		modtime := time.Now()
+
+		w.Header().Add("Content-Disposition", "Attachment;filename=resultado.csv")
+		w.Header().Add("filename", "text/csv")
+		http.ServeContent(w, req, "", modtime, content)
+	}
+
+	w.Header().Set("CONTENT-TYPE", "text/html; charset=UTF-8")
+	fmt.Fprintf(w, `<form action="/upload" method="post" enctype="multipart/form-data">
+		            <input type="file" name="usrfile" value="arquivo">
+					<input type="submit"></form><br><br>`)
+
+}
+
+func tabelasToByteArray(tabelas ...*[][]string) []byte {
+	var b []byte
+	for _, tabela := range tabelas {
+		for _, linha := range *tabela {
+			for _, col := range linha {
+				cel := []byte(col)
+				for _, ch := range cel {
+					b = append(b, ch)
+				}
+				b = append(b, 59) // adicionar ";"
+			}
+			b = append(b, 10) // adicionar LF
+		}
+	}
+	return b
+}
+
+func gerarTabelaCredito() *[][]string {
+	//var tabCredito = [][]string{{}, {"UGE", "PRJ", "PI", "ND", "Credito"}}
+	var tabCredito [][]string
+
+	chaves := make([]string, 0, len(creditos))
+	for k := range creditos { // ordenação
+		chaves = append(chaves, k[0]+":"+k[1]+":"+k[2]) // PI, UGE, ND
+	}
+	sort.Strings(chaves)
+
+	for _, chave := range chaves {
+		aux := strings.Split(chave, ":")
+		c := [3]string{aux[0], aux[1], aux[2]}
+		credito := creditos[c]
+		if credito == 0 {
+			continue
+		}
+		projeto := projetos[c[0]]
+		registro := []string{c[1], // uge
+			projeto.sigla,
+			c[0], // PI
+			c[2], // nd
+			valorToText(credito)}
+
+		tabCredito = append(tabCredito, registro)
+	}
+	return &tabCredito
+}
+
+// retorna tabela resumido e extra respectivamente
+func gerarTabelaResumidoExtra(chaves []string) (*[][]string, *[][]string) {
+	var tabResumido, tabExtras [][]string
+
+	for _, k := range chaves {
+		c := contratos[k]
+		c.setSaldos()
+		saldos := c.Saldo.toTextArray()
+
+		registro := []string{
+			c.UGE,
+			c.Projeto,
+			c.Numero,
+			"",
+			saldos[0], // saldo Exerc Atual
+			saldos[1], // saldo RP
+			"",
+			saldos[2],
+			saldos[3],
+			saldos[4],
+			saldos[5],
+			saldos[6]}
+
+		if c.Numero == "EXTRA" {
+			tabExtras = append(tabExtras, registro)
+		} else {
+			tabResumido = append(tabResumido, registro)
+		}
+	}
+	/*
+		for _, r := range tabResumido {
+			fmt.Println(r)
+		}
+	*/
+
+	return &tabResumido, &tabExtras
+}
+
+func gerarTabelaDetalhado(chaves []string) *[][]string {
+
+	//var tabDetalhado = [][]string{{}, {"UGE", "PRJ", "Numero", "ND", "Saldo Exerc Atual", "Saldo RP", "",
+	//	"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"}}
+	var tabDetalhado [][]string
+
+	for _, kc := range chaves {
+		c := contratos[kc]
+		c.setSaldos()
+
+		for _, ke := range c.Empenhos {
+			saldos := ke.Saldo.toTextArray()
+
+			if ke.Saldo.Atual+ke.Saldo.RP < 0.001 {
+				continue
+			}
+
+			registro := []string{
+				c.UGE,
+				c.Projeto,
+				c.Numero + " : " + ke.Numero,
+				ke.ND,
+				saldos[0],
+				saldos[1],
+				"",
+				saldos[2],
+				saldos[3],
+				saldos[4],
+				saldos[5],
+				saldos[6]}
+
+			tabDetalhado = append(tabDetalhado, registro)
+		}
+	}
+	return &tabDetalhado
+}
+
+// popular tabelaTG
+func popularTabelaTG(arq *[]byte) {
+	if arq == nil { // processament local
+		csvFile, _ := os.Open("tesouro.csv")
+		reader := csv.NewReader(bufio.NewReader(csvFile))
+		reader.Comma = ';'
+		tabelaTG, _ = reader.ReadAll()
+	} else { // processamento do servidor
+		var linha []string
+		for _, b := range *arq {
+			if b == 10 { // salto de linha (LF)
+				var aux1 string
+				var aux2 []string
+
+				aux1 = strings.Join(linha, "")
+				aux2 = strings.Split(aux1, ";")
+
+				tabelaTG = append(tabelaTG, aux2)
+				linha = []string{}
+
+				continue
+			}
+			if b == 34 { // desconsiderar aspas "
+				continue
+			}
+			linha = append(linha, string(b))
+		}
+	}
+	setarCampos(tabelaTG[0])
+}
+
+func processarTG(empenhos map[string]*Empenho,
 	projetos map[string]*Projeto) {
 
-	csvFile, _ := os.Open("tesouro.csv")
-	reader := csv.NewReader(bufio.NewReader(csvFile))
-	reader.Comma = ';'
-
-	primeiraLinha := true
 	anoAtual := time.Now().Local().Year()
 
-	for {
-		linha, err := reader.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Fatal(err)
-		}
-
-		if primeiraLinha {
-			primeiraLinha = false
-			setarCampos(linha)
-		}
-
+	for _, linha := range tabelaTG {
 		anoTrans, _ := strconv.Atoi(linha[colAnoTrans]) // ANO DA TRANSAÇÃO (0)
 
 		empNumero := linha[colNumEmp]
@@ -436,113 +622,33 @@ func (emp *Empenho) setSaldos() {
 
 	rp := strconv.FormatFloat(emp.Saldo.RP, 'f', 2, 32)
 	rp = strings.Repeat(" ", 15-len(rp)) + rp
-
-	/*
-		fmt.Println(emp.Numero, "\t",
-			rp, "\t\t\t",
-			strconv.FormatFloat(emp.Saldo.Atual, 'f', 2, 32))
-	*/
 }
 
-func gravarContratosCabecalho(writer *csv.Writer) {
-	writer.Write([]string{"UGE", "PRJ", "Numero", "ND", "Saldo Exerc Atual", "Saldo RP", "",
-		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"})
+func getCabecalhoEmpenhado() *[][]string {
+	return &[][]string{{"UGE", "PRJ", "Numero", "ND", "Saldo Exerc Atual", "Saldo RP", "",
+		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"}}
 }
 
-func gravarContratosResumido(chaves []string, writer *csv.Writer) {
-	var extras [][]string
-
-	for _, k := range chaves {
-		c := contratos[k]
-		c.setSaldos()
-		saldos := c.Saldo.toTextArray()
-
-		registro := []string{
-			c.UGE,
-			c.Projeto,
-			c.Numero,
-			"",
-			saldos[0], // saldo Exerc Atual
-			saldos[1], // saldo RP
-			"",
-			saldos[2],
-			saldos[3],
-			saldos[4],
-			saldos[5],
-			saldos[6]}
-
-		if c.Numero == "EXTRA" {
-			extras = append(extras, registro)
-		} else {
-			writer.Write(registro)
-		}
-	}
-	writer.WriteAll(extras)
+func getCabecalhoCredito() *[][]string {
+	return &[][]string{{"UGE", "PRJ", "PI", "ND", "Credito"}}
 }
 
-func gravarContratosDetalhado(chaves []string, writer *csv.Writer) {
-	gravarContratosCabecalho(writer)
-
-	for _, kc := range chaves {
-		c := contratos[kc]
-		c.setSaldos()
-
-		for _, ke := range c.Empenhos {
-			saldos := ke.Saldo.toTextArray()
-
-			if ke.Saldo.Atual+ke.Saldo.RP < 0.001 {
-				continue
-			}
-
-			registro := []string{
-				c.UGE,
-				c.Projeto,
-				c.Numero + " : " + ke.Numero,
-				ke.ND,
-				saldos[0],
-				saldos[1],
-				"",
-				saldos[2],
-				saldos[3],
-				saldos[4],
-				saldos[5],
-				saldos[6]}
-
-			writer.Write(registro)
-		}
-		//writer.Write([]string{}) // pula linha
+func gravarTabela(writer *csv.Writer, tabelas ...*[][]string) {
+	for _, tabela := range tabelas {
+		writer.WriteAll(*tabela)
 	}
-}
-
-func gravarCreditosNaoEmpenhados(writer *csv.Writer) {
-	writer.Write([]string{"UGE", "PRJ", "PI", "ND", "Credito"})
-
-	chaves := make([]string, 0, len(creditos))
-	for k := range creditos { // ordenação
-		chaves = append(chaves, k[0]+":"+k[1]+":"+k[2]) // PI, UGE, ND
-	}
-	sort.Strings(chaves)
-
-	for _, chave := range chaves {
-		aux := strings.Split(chave, ":")
-		c := [3]string{aux[0], aux[1], aux[2]}
-		credito := creditos[c]
-		if credito == 0 {
-			continue
-		}
-		projeto := projetos[c[0]]
-		registro := []string{c[1], // uge
-			projeto.sigla,
-			c[0], // PI
-			c[2], // nd
-			valorToText(credito)}
-		writer.Write(registro)
-
-	}
-
 }
 
 func gravarSaldos() {
+	chaves := getChavesOrdenacao(contratos)
+
+	tabResumido, tabExtra := gerarTabelaResumidoExtra(chaves)
+	tabCredito := gerarTabelaCredito()
+	tabDetalhado := gerarTabelaDetalhado(chaves)
+
+	tabCabecalhoEmpenhado := getCabecalhoEmpenhado()
+	tabCabecalhoCredito := getCabecalhoCredito()
+
 	t := time.Now().Local()
 	arq := "db/saldos " + t.Format("2006-01-02") + ".csv"
 
@@ -553,19 +659,13 @@ func gravarSaldos() {
 	writer.Comma = ';'
 	defer writer.Flush()
 
-	chaves := make([]string, 0, len(contratos)) // ordenação
-	for k := range contratos {
-		chaves = append(chaves, k) // UGE, PROJ, CNT.NUMERO
-	}
-	sort.Strings(chaves)
+	gravarTabela(writer, tabCabecalhoEmpenhado, tabResumido, tabExtra)
+	writer.Write([]string{}) // pula linha
 
-	gravarContratosCabecalho(writer)
-	gravarContratosResumido(chaves, writer)
+	gravarTabela(writer, tabCabecalhoCredito, tabCredito)
 	writer.Write([]string{}) // pula linha
-	gravarCreditosNaoEmpenhados(writer)
-	writer.Write([]string{}) // pula linha
-	writer.Write([]string{}) // pula linha
-	gravarContratosDetalhado(chaves, writer)
+
+	gravarTabela(writer, getCabecalhoEmpenhado(), tabDetalhado)
 }
 
 func pressionarTecla() { // utilizar para testes
@@ -575,11 +675,29 @@ func pressionarTecla() { // utilizar para testes
 	fmt.Println(text)
 }
 
+func getChavesOrdenacao(contratos map[string]*Contrato) []string {
+	chaves := make([]string, 0, len(contratos)) // ordenação
+	for k := range contratos {
+		chaves = append(chaves, k) // UGE, PROJ, CNT.NUMERO
+	}
+	sort.Strings(chaves)
+	return chaves
+}
+
 func main() {
 	setup()
-	mapProjetos := lerArqPI()       // string(PI),Projeto
-	mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
-	lerArqTesouro(mapEmpenhos, mapProjetos)
 
-	gravarSaldos()
+	modoServer := flag.Bool("server", false, "modo servidor")
+	flag.Parse()
+
+	if *modoServer {
+		http.HandleFunc("/", upload)
+		http.ListenAndServe(":8080", nil)
+	} else {
+		popularTabelaTG(nil)
+		mapProjetos := lerArqPI()       // string(PI),Projeto
+		mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
+		processarTG(mapEmpenhos, mapProjetos)
+		gravarSaldos()
+	}
 }
