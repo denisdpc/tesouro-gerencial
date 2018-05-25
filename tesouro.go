@@ -234,14 +234,8 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
 		processarTG(mapEmpenhos, mapProjetos)
 
-		chaves := getChavesOrdenacao(contratos)
-
-		tabResumido, tabExtras := gerarTabelaResumidoExtra(chaves)
-		tabCredito := gerarTabelaCredito()
-		tabDetalhado := gerarTabelaDetalhado(chaves)
-
-		tabCabecalhoEmpenhado := getCabecalhoEmpenhado()
-		tabCabecalhoCredito := getCabecalhoCredito()
+		tabResumido, tabExtras, tabCredito, tabDetalhado,
+			tabCabecalhoEmpenhado, tabCabecalhoCredito := gerarTabelas()
 
 		linha := &[][]string{{}}
 		content := bytes.NewReader(
@@ -281,7 +275,6 @@ func tabelasToByteArray(tabelas ...*[][]string) []byte {
 }
 
 func gerarTabelaCredito() *[][]string {
-	//var tabCredito = [][]string{{}, {"UGE", "PRJ", "PI", "ND", "Credito"}}
 	var tabCredito [][]string
 
 	chaves := make([]string, 0, len(creditos))
@@ -338,19 +331,11 @@ func gerarTabelaResumidoExtra(chaves []string) (*[][]string, *[][]string) {
 			tabResumido = append(tabResumido, registro)
 		}
 	}
-	/*
-		for _, r := range tabResumido {
-			fmt.Println(r)
-		}
-	*/
 
 	return &tabResumido, &tabExtras
 }
 
 func gerarTabelaDetalhado(chaves []string) *[][]string {
-
-	//var tabDetalhado = [][]string{{}, {"UGE", "PRJ", "Numero", "ND", "Saldo Exerc Atual", "Saldo RP", "",
-	//	"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"}}
 	var tabDetalhado [][]string
 
 	for _, kc := range chaves {
@@ -639,8 +624,8 @@ func gravarTabela(writer *csv.Writer, tabelas ...*[][]string) {
 	}
 }
 
-func gravarSaldos() {
-	chaves := getChavesOrdenacao(contratos)
+func gerarTabelas() (*[][]string, *[][]string, *[][]string, *[][]string, *[][]string, *[][]string) {
+	chaves := getChavesOrdenacao()
 
 	tabResumido, tabExtra := gerarTabelaResumidoExtra(chaves)
 	tabCredito := gerarTabelaCredito()
@@ -648,6 +633,14 @@ func gravarSaldos() {
 
 	tabCabecalhoEmpenhado := getCabecalhoEmpenhado()
 	tabCabecalhoCredito := getCabecalhoCredito()
+
+	return tabResumido, tabExtra, tabCredito, tabDetalhado, tabCabecalhoEmpenhado, tabCabecalhoCredito
+}
+
+func gravarSaldos() {
+
+	tabResumido, tabExtra, tabCredito, tabDetalhado,
+		tabCabecalhoEmpenhado, tabCabecalhoCredito := gerarTabelas()
 
 	t := time.Now().Local()
 	arq := "db/saldos " + t.Format("2006-01-02") + ".csv"
@@ -675,7 +668,7 @@ func pressionarTecla() { // utilizar para testes
 	fmt.Println(text)
 }
 
-func getChavesOrdenacao(contratos map[string]*Contrato) []string {
+func getChavesOrdenacao() []string {
 	chaves := make([]string, 0, len(contratos)) // ordenação
 	for k := range contratos {
 		chaves = append(chaves, k) // UGE, PROJ, CNT.NUMERO
