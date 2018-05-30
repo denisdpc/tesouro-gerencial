@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,7 +97,8 @@ func lerArq(arq string) *os.File {
 
 // ler arquivo PI.txt
 // retorna map(projeto) -> PI
-func lerArqPI() map[string]*Projeto {
+func lerArqPI() {
+	//func lerArqPI() map[string]*Projeto {
 	file := lerArq("PI.txt")
 	defer file.Close()
 
@@ -110,7 +112,7 @@ func lerArqPI() map[string]*Projeto {
 			projetos[aux[0]] = &proj
 		}
 	}
-	return projetos
+	//return projetos
 }
 
 // ler arquivo empenhos.txt
@@ -230,9 +232,10 @@ func upload(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		popularTabelaTG(&arq)
-		mapProjetos := lerArqPI()       // string(PI),Projeto
+		lerArqPI()                      // string(PI),Projeto
 		mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
-		processarTG(mapEmpenhos, mapProjetos)
+
+		processarTG(mapEmpenhos, projetos)
 
 		tabResumido, tabExtras, tabCredito, tabDetalhado,
 			tabCabecalhoEmpenhado, tabCabecalhoCredito := gerarTabelas()
@@ -248,6 +251,18 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Content-Disposition", "Attachment;filename=resultado.csv")
 		w.Header().Add("filename", "text/csv")
 		http.ServeContent(w, req, "", modtime, content)
+
+		arq = nil
+		tabelaTG = nil
+		projetos = nil
+		creditos = nil
+		contratos = nil
+		content = nil
+
+		tabResumido, tabExtras, tabCredito, tabDetalhado,
+			tabCabecalhoEmpenhado, tabCabecalhoCredito = nil, nil, nil, nil, nil, nil
+
+		runtime.GC()
 	}
 
 	w.Header().Set("CONTENT-TYPE", "text/html; charset=UTF-8")
@@ -688,9 +703,9 @@ func main() {
 		http.ListenAndServe(":8080", nil)
 	} else {
 		popularTabelaTG(nil)
-		mapProjetos := lerArqPI()       // string(PI),Projeto
+		lerArqPI()                      // projetos : string(PI),Projeto
 		mapEmpenhos := lerArqEmpenhos() // string(numEmpenho),*Empenho
-		processarTG(mapEmpenhos, mapProjetos)
+		processarTG(mapEmpenhos, projetos)
 		gravarSaldos()
 	}
 }
