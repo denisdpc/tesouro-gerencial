@@ -80,7 +80,7 @@ var tabelaTG [][]string
 
 func setup() {
 	uge = map[string]string{ // início do número de empenho de acordo com a UGE
-		"GAL":    "12019500001",
+		"CAE":    "12019500001",
 		"GAP-SP": "12063300001",
 		"CABE":   "12009100001",
 		"CABW":   "12009000001",
@@ -435,6 +435,12 @@ func processarTG(empenhos map[string]*Empenho,
 							continue
 						}
 						uge := linha[colUGE]
+
+						// modifica de GAL para CAE
+						if uge=="GAL" {
+							uge = "CAE"
+						}
+
 						nd := linha[colNd]
 
 						if creditos == nil {
@@ -450,6 +456,11 @@ func processarTG(empenhos map[string]*Empenho,
 				if _, piListado := projetos[pi]; piListado { // PI listado em PI.txt
 					ugeNumero := linha[colUGE]
 					prjSigla := projetos[pi].sigla
+
+					// modifica de GAL para CAE
+					if ugeNumero =="GAL" {
+						ugeNumero = "CAE"
+					}
 
 					chave := ugeNumero + " " + prjSigla + " EXTRA"
 					if contratos[chave] == nil {
