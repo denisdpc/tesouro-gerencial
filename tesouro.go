@@ -636,7 +636,7 @@ func (emp *Empenho) setSaldos() {
 }
 
 func getCabecalhoEmpenhado() *[][]string {
-	return &[][]string{{"UGE", "PRJ", "Numero", "ND", "Saldo Exerc Atual", "Saldo RP", "",
+	return &[][]string{{"UGE", "PRJ", "Numero", "ND", "Saldo ATUAL", "Saldo RP", "",
 		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"}}
 }
 
