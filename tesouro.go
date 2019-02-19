@@ -437,7 +437,7 @@ func processarTG(empenhos map[string]*Empenho,
 						uge := linha[colUGE]
 
 						// modifica de GAL para CAE
-						if uge=="GAL" {
+						if uge == "GAL" {
 							uge = "CAE"
 						}
 
@@ -458,7 +458,7 @@ func processarTG(empenhos map[string]*Empenho,
 					prjSigla := projetos[pi].sigla
 
 					// modifica de GAL para CAE
-					if ugeNumero =="GAL" {
+					if ugeNumero == "GAL" {
 						ugeNumero = "CAE"
 					}
 
@@ -527,7 +527,7 @@ func processarTG(empenhos map[string]*Empenho,
 			RpInscrito:   rpInscr,
 			RpReinscrito: rpReinscr,
 			RpCancelado:  rpCancel,
-			RpLiquidado:  rpLiq}
+			RpLiquidado:  rpLiq} // RESTOS A PAGAR NAO PROCESSADOS LIQUIDADOS
 
 		empenho.Transacoes = append(empenho.Transacoes, &transacao)
 		empenho.ND = nd
@@ -592,9 +592,9 @@ func (emp *Empenho) setSaldos() {
 			saldos[6] += transacao.RpLiquidado
 			saldos[7] += transacao.RpCancelado
 		} else { // execução ano atual
-			saldos[0] += transacao.Empenhado
-			saldos[8] += transacao.RpLiquidado
-			saldos[9] += transacao.RpCancelado
+			saldos[0] += transacao.Empenhado   // empenhado no ano atual
+			saldos[8] += transacao.RpLiquidado // RP liquidado no ano atual
+			saldos[9] += transacao.RpCancelado // RP cancelado no ano atual
 		}
 		saldos[2] -= transacao.Anulado
 		saldos[3] += transacao.Liquidado
@@ -618,9 +618,15 @@ func (emp *Empenho) setSaldos() {
 		rpCancelExercAtual := saldos[9]
 		saldoRP -= rpLiqExercAtual + rpCancelExercAtual
 	} else {
-		empenhado := saldos[0] + saldos[1] - saldos[2]
-		liquidado := saldos[3]
-		saldoATUAL = empenhado - liquidado
+
+		if saldos[0] > 0 { // houve empenho no ano atual ?
+			empenhado := saldos[0] + saldos[1] - saldos[2]
+			liquidado := saldos[3]
+			saldoATUAL = empenhado - liquidado
+		} else { // se não houve
+			saldoATUAL = 0
+		}
+
 	}
 
 	emp.RP = saldoRP
@@ -637,7 +643,7 @@ func (emp *Empenho) setSaldos() {
 
 func getCabecalhoEmpenhado() *[][]string {
 	return &[][]string{{"UGE", "PRJ", "Numero", "ND", "Saldo ATUAL", "Saldo RP", "",
-		"Empenhado", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"}}
+		"Empenhado ATUAL", "Empenhado RP", "RP reinsc atual", "Liquidado", "Anulado"}}
 }
 
 func getCabecalhoCredito() *[][]string {
